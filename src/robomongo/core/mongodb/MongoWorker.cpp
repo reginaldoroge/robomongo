@@ -18,10 +18,13 @@
 #include "robomongo/core/engine/ScriptEngine.h"
 #include "robomongo/core/EventBus.h"
 #include "robomongo/core/mongodb/MongoClient.h"
+#include "robomongo/core/mongodb/modern/ModernConnectionProbe.h"
+#include "robomongo/core/mongodb/modern/ModernMongoDriver.h"
 #include "robomongo/core/settings/ConnectionSettings.h"
 #include "robomongo/core/settings/ReplicaSetSettings.h"
 #include "robomongo/core/settings/CredentialSettings.h"
 #include "robomongo/core/settings/SettingsManager.h"
+#include "robomongo/core/settings/SshSettings.h"
 #include "robomongo/core/settings/SslSettings.h"
 #include "robomongo/core/utils/BsonUtils.h"
 #include "robomongo/core/utils/Logger.h"
@@ -31,7 +34,7 @@
 namespace Robomongo
 {
     std::string const APP_VERSION = PROJECT_VERSION;
-    std::string const APP_NAME_VERSION { "robo3t-" + APP_VERSION };
+    std::string const APP_NAME_VERSION { "dino-robomongo-" + APP_VERSION };
 
     MongoWorker::MongoWorker(ConnectionSettings *connection, bool isLoadMongoRcJs, int batchSize,
                              double mongoTimeoutSec, int shellTimeoutSec, QObject *parent) 
@@ -256,6 +259,8 @@ namespace Robomongo
             }
 
             boost::scoped_ptr<MongoClient> client(getClient());
+            ModernDriverInfo driverInfo = ModernConnectionProbe().probe(*_connSettings);
+            _modernDriverEnabled = driverInfo.modernServer;
             std::vector<std::string> const dbNames = getDatabaseNamesSafe(event);
 
             // If we do not have databases, it means that we are unable to
@@ -269,7 +274,9 @@ namespace Robomongo
             resetGlobalSSLparams();
 
             auto connInfo = ConnectionInfo(_connSettings->getFullAddress(), dbNames, client->getVersion(), 
-                                           client->dbVersionStr(), client->getStorageEngineType(), event->uuid);
+                                           client->dbVersionStr(), client->getStorageEngineType(),
+                                           event->uuid, driverInfo.driverName, driverInfo.driverVersion,
+                                           driverInfo.maxWireVersion);
 
             // todo: two ctors for rep.set and single server.
             reply(event->sender(), new EstablishConnectionResponse(this, connInfo, event->connectionType, 
@@ -331,14 +338,28 @@ namespace Robomongo
         return std::string();
     }
 
+    bool MongoWorker::canUseModernDriver() const
+    {
+        return _modernDriverEnabled && !_connSettings->isReplicaSet() &&
+               !_connSettings->sshSettings()->enabled() &&
+               !_connSettings->sslSettings()->sslEnabled();
+    }
+
     std::vector<std::string> MongoWorker::getDatabaseNamesSafe(EstablishConnectionRequest* event /*= nullptr*/)
     {
         std::set<std::string> dbNames;
         auto const primaryCredential { _connSettings->primaryCredential() };
 
         try {
-            boost::scoped_ptr<MongoClient> client(getClient());
-            std::vector<std::string> dbNamesFetched { client->getDatabaseNames() };
+            std::vector<std::string> dbNamesFetched;
+
+            if (canUseModernDriver())
+                dbNamesFetched = ModernMongoDriver(*_connSettings).listDatabaseNames();
+            else {
+                boost::scoped_ptr<MongoClient> client(getClient());
+                dbNamesFetched = client->getDatabaseNames();
+            }
+
             dbNames = std::set<std::string> { dbNamesFetched.cbegin(), dbNamesFetched.cend() };
         } 
         catch(const std::exception &ex) {
@@ -425,10 +446,17 @@ namespace Robomongo
     void MongoWorker::handle(LoadCollectionNamesRequest *event)
     {
         try {
-            boost::scoped_ptr<MongoClient> client(getClient());
-            auto const& namespaces = client->getCollectionNamesWithDbname(event->databaseName());
-            std::vector<MongoCollectionInfo> const& collInfos = client->runCollStatsCommand(namespaces);
-            client->done();
+            std::vector<MongoCollectionInfo> collInfos;
+
+            if (canUseModernDriver())
+                collInfos = ModernMongoDriver(*_connSettings).listCollections(event->databaseName());
+            else {
+                boost::scoped_ptr<MongoClient> client(getClient());
+                auto const& namespaces = client->getCollectionNamesWithDbname(event->databaseName());
+                collInfos = client->runCollStatsCommand(namespaces);
+                client->done();
+            }
+
             reply(event->sender(), new LoadCollectionNamesResponse(this, event->databaseName(), collInfos));
         } catch(const std::exception &ex) {
             reply(event->sender(), new LoadCollectionNamesResponse(this, EventError(ex.what())));
@@ -453,13 +481,39 @@ namespace Robomongo
     void MongoWorker::handle(LoadCollectionIndexesRequest *event)
     {
         try {
-            boost::scoped_ptr<MongoClient> client(getClient());
-            const std::vector<IndexInfo> &ind = client->getIndexes(event->collection());
-            client->done();
+            std::vector<IndexInfo> ind;
+
+            if (canUseModernDriver())
+                ind = ModernMongoDriver(*_connSettings).listIndexes(event->collection());
+            else {
+                boost::scoped_ptr<MongoClient> client(getClient());
+                ind = client->getIndexes(event->collection());
+                client->done();
+            }
 
             reply(event->sender(), new LoadCollectionIndexesResponse(this, ind));
         } catch(const std::exception &ex) {
             reply(event->sender(), new LoadCollectionIndexesResponse(this, EventError(ex.what())));
+            sendLog(this, LogEvent::RBM_ERROR, ex.what());
+        }
+    }
+
+    void MongoWorker::handle(LoadDatabaseStorageStatsRequest *event)
+    {
+        try {
+            MongoDatabaseStorageStats stats;
+
+            if (canUseModernDriver())
+                stats = ModernMongoDriver(*_connSettings).loadStorageStats(event->databaseName());
+            else {
+                boost::scoped_ptr<MongoClient> client(getClient());
+                stats = client->loadStorageStats(event->databaseName());
+                client->done();
+            }
+
+            reply(event->sender(), new LoadDatabaseStorageStatsResponse(this, stats));
+        } catch(const std::exception &ex) {
+            reply(event->sender(), new LoadDatabaseStorageStatsResponse(this, EventError(ex.what())));
             sendLog(this, LogEvent::RBM_ERROR, ex.what());
         }
     }
@@ -469,12 +523,21 @@ namespace Robomongo
         const IndexInfo &newIndex = event->newInfo();
         const IndexInfo &oldIndex = event->oldInfo();
         try {
-            boost::scoped_ptr<MongoClient> client(getClient());
-            client->addEditIndex(oldIndex, newIndex);
-            client->done();
+            std::vector<IndexInfo> indexes;
+
+            if (canUseModernDriver()) {
+                ModernMongoDriver driver(*_connSettings);
+                driver.addEditIndex(oldIndex, newIndex);
+                indexes = driver.listIndexes(newIndex._collection);
+            } else {
+                boost::scoped_ptr<MongoClient> client(getClient());
+                client->addEditIndex(oldIndex, newIndex);
+                client->done();
+                indexes = client->getIndexes(newIndex._collection);
+            }
+
             reply(event->sender(), new AddEditIndexResponse(this, oldIndex, newIndex));
 
-            std::vector<IndexInfo> const &indexes = client->getIndexes(newIndex._collection);
             reply(event->sender(), new LoadCollectionIndexesResponse(this, indexes));
         } catch(const std::exception &ex) {
             reply(event->sender(), 
@@ -487,9 +550,14 @@ namespace Robomongo
     void MongoWorker::handle(DropCollectionIndexRequest *event)
     {
         try {
-            boost::scoped_ptr<MongoClient> client(getClient());
-            client->dropIndexFromCollection(event->collection(), event->index());
-            client->done();
+            if (canUseModernDriver())
+                ModernMongoDriver(*_connSettings).dropIndex(event->collection(), event->index());
+            else {
+                boost::scoped_ptr<MongoClient> client(getClient());
+                client->dropIndexFromCollection(event->collection(), event->index());
+                client->done();
+            }
+
             reply(event->sender(), 
                 new DropCollectionIndexResponse(this, event->collection(), event->index()));
         } catch(const std::exception &ex) {
@@ -529,14 +597,22 @@ namespace Robomongo
     void MongoWorker::handle(InsertDocumentRequest *event)
     {
         try {
-            boost::scoped_ptr<MongoClient> client(getClient());
-    
-            if (event->overwrite())
-                client->saveDocument(event->obj(), event->ns());
-            else
-                client->insertDocument(event->obj(), event->ns());
+            if (canUseModernDriver()) {
+                if (event->overwrite())
+                    ModernMongoDriver(*_connSettings).saveDocument(event->ns(), event->obj());
+                else
+                    ModernMongoDriver(*_connSettings).insertDocument(event->ns(), event->obj());
+            } else {
+                boost::scoped_ptr<MongoClient> client(getClient());
 
-            client->done();
+                if (event->overwrite())
+                    client->saveDocument(event->obj(), event->ns());
+                else
+                    client->insertDocument(event->obj(), event->ns());
+
+                client->done();
+            }
+
             reply(event->sender(), new InsertDocumentResponse(this));
         } 
         catch(const std::exception &ex) {
@@ -548,11 +624,15 @@ namespace Robomongo
     void MongoWorker::handle(RemoveDocumentRequest *event)
     {
         try {
-            boost::scoped_ptr<MongoClient> client(getClient());
-
-            client->removeDocuments(event->ns(), event->query(), 
-                                    event->removeCount() == RemoveDocumentCount::ONE);
-            client->done();
+            if (canUseModernDriver())
+                ModernMongoDriver(*_connSettings).removeDocuments(
+                    event->ns(), event->query(), event->removeCount() == RemoveDocumentCount::ONE);
+            else {
+                boost::scoped_ptr<MongoClient> client(getClient());
+                client->removeDocuments(event->ns(), event->query(),
+                                        event->removeCount() == RemoveDocumentCount::ONE);
+                client->done();
+            }
 
             reply(event->sender(), new RemoveDocumentResponse(this, event->removeCount(), event->index()));
         } 
@@ -566,9 +646,16 @@ namespace Robomongo
     void MongoWorker::handle(ExecuteQueryRequest *event)
     {
         auto const executeQuery = [&]() {
-            boost::scoped_ptr<MongoClient> client { getClient() };
-            std::vector<MongoDocumentPtr> docs = client->query(event->queryInfo());
-            client->done();
+            std::vector<MongoDocumentPtr> docs;
+
+            if (canUseModernDriver())
+                docs = ModernMongoDriver(*_connSettings).find(event->queryInfo());
+            else {
+                boost::scoped_ptr<MongoClient> client { getClient() };
+                docs = client->query(event->queryInfo());
+                client->done();
+            }
+
             reply(event->sender(),
                 new ExecuteQueryResponse(this, event->resultIndex(), event->queryInfo(), docs)
             );
@@ -595,6 +682,30 @@ namespace Robomongo
             }
 
             reply(event->sender(), new ExecuteQueryResponse(this, EventError(ex.what())));
+            sendLog(this, LogEvent::RBM_ERROR, std::string(ex.what()));
+        }
+    }
+
+    void MongoWorker::handle(ExportQueryRequest *event)
+    {
+        try {
+            std::vector<MongoDocumentPtr> docs;
+
+            if (canUseModernDriver())
+                docs = ModernMongoDriver(*_connSettings).find(event->queryInfo());
+            else {
+                boost::scoped_ptr<MongoClient> client { getClient() };
+                docs = client->query(event->queryInfo());
+                client->done();
+            }
+
+            reply(event->sender(),
+                new ExportQueryResponse(this, event->requestId(), event->queryInfo(), docs)
+            );
+        } catch(const std::exception &ex) {
+            reply(event->sender(),
+                new ExportQueryResponse(this, event->requestId(), EventError(ex.what()))
+            );
             sendLog(this, LogEvent::RBM_ERROR, std::string(ex.what()));
         }
     }
@@ -720,8 +831,12 @@ namespace Robomongo
     {
         std::string dbname = event->database();
         try {
-            boost::scoped_ptr<MongoClient> client(getClient());
-            client->createDatabase(dbname);
+            if (canUseModernDriver())
+                ModernMongoDriver(*_connSettings).createDatabase(dbname);
+            else {
+                boost::scoped_ptr<MongoClient> client(getClient());
+                client->createDatabase(dbname);
+            }
 
             // Insert to list of created database. Read docs for this hashset in the header
             _createdDbs.insert(dbname);
@@ -738,8 +853,12 @@ namespace Robomongo
     void MongoWorker::handle(DropDatabaseRequest *event)
     {
         try {
-            boost::scoped_ptr<MongoClient> client(getClient());
-            client->dropDatabase(event->database);
+            if (canUseModernDriver())
+                ModernMongoDriver(*_connSettings).dropDatabase(event->database);
+            else {
+                boost::scoped_ptr<MongoClient> client(getClient());
+                client->dropDatabase(event->database);
+            }
 
             // Remove from the list of created database, Read docs for this hashset in the header
             _createdDbs.erase(event->database);
@@ -759,10 +878,14 @@ namespace Robomongo
         std::string const& collection = event->ns().collectionName();
 
         try {
-            boost::scoped_ptr<MongoClient> client(getClient());
-            client->createCollection(event->ns().toString(), event->getSize(), event->getCapped(),
-                event->getMaxDocNum(), event->getExtraOptions());
-            client->done();
+            if (canUseModernDriver())
+                ModernMongoDriver(*_connSettings).createCollection(event->ns());
+            else {
+                boost::scoped_ptr<MongoClient> client(getClient());
+                client->createCollection(event->ns().toString(), event->getSize(), event->getCapped(),
+                    event->getMaxDocNum(), event->getExtraOptions());
+                client->done();
+            }
 
             reply(event->sender(), new CreateCollectionResponse(this, collection));
         } catch(const std::exception &ex) {
@@ -778,9 +901,13 @@ namespace Robomongo
         std::string const& collection = event->ns().collectionName();
 
         try {
-            boost::scoped_ptr<MongoClient> client(getClient());
-            client->dropCollection(event->ns());
-            client->done();
+            if (canUseModernDriver())
+                ModernMongoDriver(*_connSettings).dropCollection(event->ns());
+            else {
+                boost::scoped_ptr<MongoClient> client(getClient());
+                client->dropCollection(event->ns());
+                client->done();
+            }
 
             reply(event->sender(), new DropCollectionResponse(this, collection));
         } catch(const std::exception &ex) {
@@ -794,9 +921,13 @@ namespace Robomongo
     void MongoWorker::handle(RenameCollectionRequest *event)
     {
         try {
-            boost::scoped_ptr<MongoClient> client(getClient());
-            client->renameCollection(event->ns(), event->newCollection());
-            client->done();
+            if (canUseModernDriver())
+                ModernMongoDriver(*_connSettings).renameCollection(event->ns(), event->newCollection());
+            else {
+                boost::scoped_ptr<MongoClient> client(getClient());
+                client->renameCollection(event->ns(), event->newCollection());
+                client->done();
+            }
 
             reply(event->sender(), new RenameCollectionResponse(this, event->ns().collectionName(),
                                                                 event->newCollection()));
@@ -811,9 +942,13 @@ namespace Robomongo
         std::string const& sourceCollection = event->ns().collectionName();
 
         try {
-            boost::scoped_ptr<MongoClient> client(getClient());
-            client->duplicateCollection(event->ns(), event->newCollection());
-            client->done();
+            if (canUseModernDriver())
+                ModernMongoDriver(*_connSettings).duplicateCollection(event->ns(), event->newCollection());
+            else {
+                boost::scoped_ptr<MongoClient> client(getClient());
+                client->duplicateCollection(event->ns(), event->newCollection());
+                client->done();
+            }
 
             reply(event->sender(), 
                 new DuplicateCollectionResponse(this, sourceCollection, event->newCollection())
@@ -830,12 +965,16 @@ namespace Robomongo
     void MongoWorker::handle(CopyCollectionToDiffServerRequest *event)
     {
         try {
-            boost::scoped_ptr<MongoClient> client(getClient());
-            MongoWorker *cl = event->worker();
-            client->copyCollectionToDiffServer(
-                cl->_dbclient.get(), event->from(), event->to()
-            );
-            client->done();
+            if (canUseModernDriver())
+                ModernMongoDriver(*_connSettings).copyCollectionTo(event->from(), event->to());
+            else {
+                boost::scoped_ptr<MongoClient> client(getClient());
+                MongoWorker *cl = event->worker();
+                client->copyCollectionToDiffServer(
+                    cl->_dbclient.get(), event->from(), event->to()
+                );
+                client->done();
+            }
 
             reply(event->sender(), new CopyCollectionToDiffServerResponse(this));
         } catch(const std::exception &ex) {

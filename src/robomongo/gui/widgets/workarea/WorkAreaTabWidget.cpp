@@ -7,7 +7,6 @@
 #include "robomongo/core/utils/QtUtils.h"
 #include "robomongo/core/KeyboardManager.h"
 #include "robomongo/core/domain/MongoShell.h"
-#include "robomongo/core/settings/SettingsManager.h"
 
 #include "robomongo/gui/widgets/workarea/WorkAreaTabBar.h"
 #include "robomongo/gui/widgets/workarea/QueryWidget.h"
@@ -22,7 +21,8 @@ namespace Robomongo
      * @param workAreaWidget: WorkAreaWidget this tab belongs to.
      */
     WorkAreaTabWidget::WorkAreaTabWidget(QWidget *parent) :
-        QTabWidget(parent)
+        QTabWidget(parent),
+        _welcomeTab(nullptr)
     {
         auto tab = new WorkAreaTabBar(this);
         // This line (setTabBar()) should go before setTabsClosable(true)
@@ -71,15 +71,13 @@ namespace Robomongo
         scrollArea->setWidget(_welcomeTab);
         scrollArea->setBackgroundRole(QPalette::Base);
         scrollArea->setWidgetResizable(true);
-
-        if (!AppRegistry::instance().settingsManager()->disableHttpsFeatures()) {
-#ifdef __APPLE__
-            addTab(scrollArea, QIcon(), "Welcome");
-#else
-            addTab(scrollArea, GuiRegistry::instance().welcomeTabIcon(), "Welcome");
-#endif        
-        }
         scrollArea->setFrameShape(QFrame::NoFrame);
+
+#ifdef __APPLE__
+        addTab(scrollArea, QIcon(), "Revival");
+#else
+        addTab(scrollArea, GuiRegistry::instance().welcomeTabIcon(), "Revival");
+#endif
     }
 
     void WorkAreaTabWidget::closeTab(int index)
@@ -140,27 +138,18 @@ namespace Robomongo
 
     void WorkAreaTabWidget::openWelcomeTab()
     {
-        auto scrollArea = qobject_cast<QScrollArea*>(_welcomeTab->getParent());
+        auto scrollArea = qobject_cast<QScrollArea*>(_welcomeTab ? _welcomeTab->getParent() : nullptr);
         if (!scrollArea)
             return;
 
-        _welcomeTab = new WelcomeTab(scrollArea);
-        scrollArea->setWidget(_welcomeTab);
-        scrollArea->setBackgroundRole(QPalette::Base);
-
+        if (indexOf(scrollArea) == -1) {
 #ifdef __APPLE__
-        QIcon icon;
+            insertTab(0, scrollArea, QIcon(), "Revival");
 #else
-        QIcon const& icon = GuiRegistry::instance().welcomeTabIcon();
+            insertTab(0, scrollArea, GuiRegistry::instance().welcomeTabIcon(), "Revival");
 #endif
-        // If welcome tab is closed open it as first tab otherwise refresh on 
-        // it's current place.
-        if (indexOf(scrollArea) == -1)  // Welcome Tab is closed
-            insertTab(0, scrollArea, icon, "Welcome");
-        else 
-            insertTab(indexOf(scrollArea), scrollArea, icon, "Welcome");
+        }
 
-        scrollArea->setFrameShape(QFrame::NoFrame);
         setCurrentIndex(indexOf(scrollArea));
     }
 
@@ -211,9 +200,6 @@ namespace Robomongo
     void WorkAreaTabWidget::resizeEvent(QResizeEvent* event)
     {
         QTabWidget::resizeEvent(event);
-
-        if (_welcomeTab && _welcomeTab->isVisible())
-            _welcomeTab->resize();
     }
 
     void WorkAreaTabWidget::tabBar_tabCloseRequested(int index)
@@ -316,4 +302,3 @@ namespace Robomongo
         queryWidget->showProgress();
     }
 }
-

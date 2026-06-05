@@ -78,6 +78,11 @@ namespace Robomongo
         show();
     }
 
+    int PagingWidget::batchSize() const
+    {
+        return _batchSizeEdit->text().toInt();
+    }
+
     void PagingWidget::refresh()
     {
         int limit = _batchSizeEdit->text().toInt();

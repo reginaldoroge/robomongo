@@ -1,5 +1,6 @@
 #include <QApplication>
 #include <QDesktopWidget>
+#include <QIcon>
 
 #include <locale.h>
 
@@ -19,6 +20,7 @@
 #include "robomongo/core/utils/Logger.h"       
 #include "robomongo/gui/MainWindow.h"
 #include "robomongo/gui/AppStyle.h"
+#include "robomongo/gui/StartupSplash.h"
 #include "robomongo/gui/dialogs/EulaDialog.h"
 #include "robomongo/ssh/ssh.h"
 #include "robomongo/utils/RoboCrypt.h"       
@@ -60,6 +62,8 @@ int main(int argc, char *argv[], char** envp)
 
     // Initialize Qt application
     QApplication app(argc, argv);
+    app.setWindowIcon(QIcon(":/robomongo/icons/logo-256x256.png"));
+    Robomongo::showStartupSplash(app);
 
     // On Unix/Linux Qt is configured to use the system locale settings by default.
     // This can cause a conflict when using POSIX functions, for instance, when

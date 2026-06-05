@@ -7,6 +7,7 @@
 #include "robomongo/core/domain/MongoQueryInfo.h"
 #include "robomongo/core/domain/MongoUser.h"
 #include "robomongo/core/domain/MongoFunction.h"
+#include "robomongo/core/domain/MongoStorageStats.h"
 #include "robomongo/core/events/MongoEventsInfo.h"
 
 namespace Robomongo
@@ -54,6 +55,7 @@ namespace Robomongo
 
         MongoCollectionInfo runCollStatsCommand(const std::string &ns);
         std::vector<MongoCollectionInfo> runCollStatsCommand(const std::vector<std::string> &namespaces);
+        MongoDatabaseStorageStats loadStorageStats(const std::string &dbName) const;
 
         void done();
 

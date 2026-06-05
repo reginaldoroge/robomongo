@@ -17,6 +17,7 @@ namespace Robomongo
         PagingWidget(QWidget *parent = NULL);
         void setSkip(int skip);
         void setBatchSize(int limit);
+        int batchSize() const;
 
     Q_SIGNALS:
         void leftClicked(int skip, int limit);

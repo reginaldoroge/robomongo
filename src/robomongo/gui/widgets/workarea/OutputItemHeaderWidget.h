@@ -48,6 +48,7 @@ namespace Robomongo
         QPushButton *_treeButton;
         QPushButton *_tableButton;
         QPushButton *_customButton;
+        QPushButton *_exportButton;
         QPushButton *_maxButton;
         QFrame *_verticalLine;
         QPushButton *_dockUndockButton;

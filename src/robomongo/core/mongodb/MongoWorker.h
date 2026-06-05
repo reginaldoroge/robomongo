@@ -73,6 +73,8 @@ namespace Robomongo
         */
         void handle(LoadCollectionIndexesRequest *event);
 
+        void handle(LoadDatabaseStorageStatsRequest *event);
+
         /**
         * @brief Add/edit indexes in collection
         */
@@ -102,6 +104,7 @@ namespace Robomongo
          * @brief Load list of all collection names
          */
         void handle(ExecuteQueryRequest *event);
+        void handle(ExportQueryRequest *event);
 
         /**
          * @brief Execute javascript
@@ -140,6 +143,7 @@ namespace Robomongo
 
         std::vector<std::string> getDatabaseNamesSafe(EstablishConnectionRequest* event = nullptr);
         std::string getAuthBase() const;
+        bool canUseModernDriver() const;
 
         // Returns a pair of DBClientBase* connection and error string
         std::pair<mongo::DBClientBase*, std::string> getConnection(bool mayReturnNull = false);
@@ -195,6 +199,7 @@ namespace Robomongo
         std::unique_ptr<mongo::DBClientReplicaSet> _dbclientRepSet;
 
         ConnectionSettings *_connSettings;
+        bool _modernDriverEnabled = false;
 
         // Collection of created databases.
         // Starting from 3.0, MongoDB drops empty databases.

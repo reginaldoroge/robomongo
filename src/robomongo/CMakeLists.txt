@@ -31,6 +31,9 @@ set(SOURCES
     core/domain/MongoUtils.cpp
     core/domain/MongoCollection.cpp
     core/domain/MongoCollectionInfo.cpp
+    core/domain/MongoStorageStats.cpp
+    core/domain/QueryResultFormatter.cpp
+    core/domain/QueryResultExportPlan.cpp
     core/domain/MongoQueryInfo.cpp
     core/domain/CursorPosition.cpp
     core/domain/ScriptInfo.cpp
@@ -48,6 +51,10 @@ set(SOURCES
     core/domain/MongoDatabase.cpp
     core/domain/App.cpp
     core/mongodb/MongoClient.cpp
+    core/mongodb/modern/ModernConnectionUri.cpp
+    core/mongodb/modern/ModernConnectionProbe.cpp
+    core/mongodb/modern/ModernDriverRuntime.cpp
+    core/mongodb/modern/ModernMongoDriver.cpp
     core/mongodb/MongoWorker.cpp
     core/mongodb/ReplicaSet.cpp
     core/settings/SettingsManager.cpp
@@ -59,6 +66,7 @@ set(SOURCES
 
     # Isolated Scope #3
     gui/GuiRegistry.cpp
+    gui/StartupSplash.cpp
     gui/dialogs/AboutDialog.cpp
     gui/dialogs/EulaDialog.cpp
     gui/dialogs/ConnectionAdvancedTab.cpp
@@ -78,6 +86,7 @@ set(SOURCES
     gui/dialogs/PreferencesDialog.cpp
     gui/dialogs/ConnectionsDialog.cpp
     gui/dialogs/ExportDialog.cpp
+    gui/dialogs/ResultExportDialog.cpp
     gui/dialogs/ChangeShellTimeoutDialog.cpp
 
     # Isolated scope #5
@@ -159,6 +168,7 @@ target_link_libraries(robomongo
         qjson
         qscintilla
         mongodb
+        MongoCxx::Driver
         ssh
         Threads::Threads)   # Target from FindThreads CMake module
 
@@ -177,6 +187,14 @@ target_include_directories(robomongo
     PRIVATE
         ${CMAKE_HOME_DIRECTORY}/src)
 
+target_compile_definitions(robomongo
+    PRIVATE
+        _LIBCPP_ENABLE_CXX17_REMOVED_UNARY_BINARY_FUNCTION)
+
+target_compile_options(robomongo
+    PRIVATE
+        $<$<CXX_COMPILER_ID:AppleClang,Clang>:-Wno-enum-constexpr-conversion>)
+
 # Get build number
 find_package(Git)
 if(GIT_FOUND)
@@ -187,12 +205,11 @@ if(GIT_FOUND)
         OUTPUT_STRIP_TRAILING_WHITESPACE
     )    
 else(GIT_FOUND)
-    MESSAGE( FATAL_ERROR "Unable to find Git" )
     set(BUILD_NUMBER 0)
 endif(GIT_FOUND)
 
 if(BUILD_NUMBER STREQUAL "")
-   MESSAGE( FATAL_ERROR "Failed to get BUILD_NUMBER" )
+   set(BUILD_NUMBER "source")
 endif()
 
 set(BUILD_NUMBER ${BUILD_NUMBER} CACHE INTERNAL "")
@@ -210,6 +227,7 @@ target_compile_definitions(robomongo
         PROJECT_GITHUB_ISSUES="${PROJECT_GITHUB_ISSUES}"
         PROJECT_VERSION="${PROJECT_VERSION}"
         PROJECT_VERSION_SHORT="${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}"
+        MODERN_MONGOCXX_VERSION="${MONGOCXX_VERSION}"
         BUILD_NUMBER="${BUILD_NUMBER}"
         PROJECT_NAME_LOWERCASE="${PROJECT_NAME_LOWERCASE}"
         PROJECT_QT_VERSION="${Qt5Core_VERSION}"        
@@ -233,7 +251,7 @@ if(SYSTEM_WINDOWS)
     target_sources(robomongo PRIVATE "${CMAKE_BINARY_DIR}/winres.rc")
 
     # Rename output name for Windows
-    set_target_properties(robomongo PROPERTIES OUTPUT_NAME "robo3t")
+    set_target_properties(robomongo PROPERTIES OUTPUT_NAME "dino-robomongo")
 
     # Suppress "warning C4477: 'sprintf'..." from robomongo\shell\db\ptimeutil.cpp
     # Suppress "warning C4291: ...no matching operator delete found" from third_party\mozjs-60
@@ -249,21 +267,24 @@ elseif(SYSTEM_MACOSX)
     string(TIMESTAMP CURRENT_YEAR "%Y")
     set_target_properties(robomongo PROPERTIES
         INSTALL_RPATH "@executable_path/../Frameworks"
-        OUTPUT_NAME "Robo 3T"
+        OUTPUT_NAME "dino-robomongo"
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/install/macosx/Info.plist.in"
-        MACOSX_BUNDLE_BUNDLE_NAME "Robo 3T"
-        MACOSX_BUNDLE_GUI_IDENTIFIER "com.3tsoftwarelabs.robo3t"
-        MACOSX_BUNDLE_INFO_STRING "Robo 3T ${PROJECT_VERSION}. Copyright 3T Software Labs Ltd, 2014 - ${CURRENT_YEAR}"
+        MACOSX_BUNDLE_BUNDLE_NAME "dino-robomongo"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "local.dino.robomongo"
+        MACOSX_BUNDLE_INFO_STRING "dino-robomongo ${PROJECT_VERSION}. Revival build, ${CURRENT_YEAR}"
         MACOSX_BUNDLE_SHORT_VERSION "${PROJECT_VERSION}"
         MACOSX_BUNDLE_LONG_VERSION "${PROJECT_VERSION}"
         MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
-        MACOSX_BUNDLE_COPYRIGHT "Copyright 3T Software Labs Ltd, 2014 - ${CURRENT_YEAR}"
+        MACOSX_BUNDLE_COPYRIGHT "Revival build based on Robo 3T sources, ${CURRENT_YEAR}"
         MACOSX_BUNDLE_ICON_FILE "robomongo")
+    set_source_files_properties("${CMAKE_SOURCE_DIR}/install/macosx/robomongo.icns"
+        PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
+    target_sources(robomongo PRIVATE "${CMAKE_SOURCE_DIR}/install/macosx/robomongo.icns")
 
 elseif(SYSTEM_LINUX)
     set_target_properties(robomongo PROPERTIES
         INSTALL_RPATH "$ORIGIN/../lib"
-        OUTPUT_NAME "robo3t")
+        OUTPUT_NAME "dino-robomongo")
 endif()
 
 # Install

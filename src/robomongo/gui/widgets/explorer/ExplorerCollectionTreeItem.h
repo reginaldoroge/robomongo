@@ -12,6 +12,7 @@ namespace Robomongo
     class LoadCollectionIndexesResponse;
     struct AddEditIndexResponse;
     class DropCollectionIndexResponse;
+    class ExplorerCollectionIndexItem;
     class ExplorerCollectionIndexesDir;
     class ExplorerDatabaseTreeItem;
 
@@ -28,8 +29,11 @@ namespace Robomongo
         typedef ExplorerTreeItem BaseClass;
         ExplorerCollectionTreeItem(QTreeWidgetItem *parent, ExplorerDatabaseTreeItem *databaseItem, MongoCollection *collection);
         MongoCollection *collection() const { return _collection; }
+        void setStorageSize(double storageSizeBytes);
+        void setIndexStorageSizes(const std::vector<std::pair<std::string, double>> &indexSizes);
+        void refreshIndexesWithSizes(const std::vector<std::pair<std::string, double>> &indexSizes);
         void expand();
-        void dropIndex(const QTreeWidgetItem * const ind);
+        void dropIndex(const ExplorerCollectionIndexItem *const ind);
         void openCurrentCollectionShell(const QString &script, bool execute = true, const CursorPosition &cursor = CursorPosition());
         ExplorerDatabaseTreeItem *const databaseItem() const { return _databaseItem; }
 
@@ -59,6 +63,7 @@ namespace Robomongo
     private:
         QString buildToolTip(MongoCollection *collection);
         ExplorerCollectionIndexesDir *_indexDir;
+        std::vector<std::pair<std::string, double>> _pendingIndexSizes;
         MongoCollection *const _collection;
         ExplorerDatabaseTreeItem *const _databaseItem;
     };

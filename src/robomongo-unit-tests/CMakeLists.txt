@@ -23,6 +23,8 @@ set(SOURCES_TEST
     ${ROBO_SRC_DIR}/utils/RoboCrypt_test.cpp
     ${ROBO_SRC_DIR}/utils/StringOperations_test.cpp
     ${ROBO_SRC_DIR}/core/HexUtils_test.cpp
+    ${ROBO_SRC_DIR}/core/domain/QueryResultFormatter_test.cpp
+    ${ROBO_SRC_DIR}/core/domain/QueryResultExportPlan_test.cpp
 )
 
 ### --- Setup robo_unit_tests exec. & link ROBO_OBJ_FILES
@@ -86,6 +88,7 @@ target_link_libraries(robo_unit_tests
     qjson
     qscintilla
     mongodb
+    MongoCxx::Driver
     ssh
     Threads::Threads
     ${ROBO_OBJ_FILES}

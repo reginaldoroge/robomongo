@@ -15,6 +15,8 @@ namespace Robomongo
         using BaseClass = ExplorerTreeItem ;
         explicit ExplorerCollectionIndexItem(
             ExplorerCollectionIndexesDir *parent, const IndexInfo &info);
+        std::string name() const { return _info._name; }
+        void setStorageSize(double storageSizeBytes);
 
     private Q_SLOTS:
         void ui_dropIndex();

@@ -1,171 +1,147 @@
-## Important
+# dino-robomongo 2.0.0
 
-If you are using Studio 3T, please file any feedback on the [Studio 3T Feedback](https://studio3t.com/feedback/) page. If you are using Studio 3T Free, there is the [3T Community](https://community.studio3t.com/) for discussions with a [dedicated Free section](https://community.studio3t.com/c/studio-3t-free/13). Studio 3T does not monitor this repository for Studio 3T issues.
+dino-robomongo is an effort to bring Robo 3T back as a fast, native, cross-platform MongoDB desktop client.
 
-# End of Robo 3T Development
+The original Robo 3T was valuable because it was small, direct, and shell-centric. This fork keeps that spirit, removes stale promotional surfaces, and starts modernizing the build so the app can run on current machines again.
 
-Robo 3T is no longer being developed by Studio 3T. Studio 3T recommends users looking for a MongoDB GUI client try [Studio 3T Free](https://studio3t.com/free), a free-forever edition of the Studio 3T tools.
+## Why This Exists
 
-Read more about the changes on the [Robo 3T Blog](https://blog.robomongo.org/studio3t-free/).
+Robo 3T still solves a real problem: many teams need a lightweight MongoDB UI that opens quickly, exposes the database clearly, and does not force a heavy commercial workflow.
 
-The last release of Robo 3T is version 1.4.4, downloadable from the following links: 
+The gap is compatibility. The original app embeds the MongoDB 4.2 shell/client. That is useful for older servers such as MongoDB 3.6, but it is not a complete answer for modern MongoDB 7 and 8.
 
-* [Robo 3T Windows .zip](https://download.studio3t.com/robomongo/windows/robo3t-1.4.4-windows-x86_64-e6ac9ec5.zip)
+This revival keeps the legacy path alive while preparing the project for a second, modern driver path.
 
-* [Robo 3T Windows .exe](https://download.studio3t.com/robomongo/windows/robo3t-1.4.4-windows-x86_64-e6ac9ec5.exe)
+## Current Status
 
-* [Robo 3T Mac](https://download.studio3t.com/robomongo/mac/robo3t-1.4.4-darwin-x86_64-e6ac9ec.dmg)
+Working now:
 
-* [Robo 3T Linux](https://download.studio3t.com/robomongo/linux/robo3t-1.4.4-linux-x86_64-e6ac9ec.tar.gz)
+- Native macOS ARM64 build.
+- Qt 5 UI running on Apple Silicon.
+- Embedded MongoDB shell/client 4.2 compiled for ARM64.
+- Legacy MongoDB connections, including older MongoDB 3.6 targets.
+- Basic MongoDB 8 connectivity for currently tested flows.
+- Driver status indicator in the connection test UI.
+- Modern `mongocxx` compatibility probe wired into the main app.
+- The old welcome/promotional tab was replaced by the dino-robomongo screen.
 
-And the source code from [Robo 3T repository](https://github.com/Studio3T/robomongo/latest).
+Known limitations:
 
-Studio 3T would like to thank the Robo 3T community who used and supported the application, since it was acquired in 2017. This repository, the website and blog will be left online and available to maintain a record of what was one of the most influential MongoDB clients of its time.
+- MongoDB 8 support is not complete yet.
+- The current runtime still uses the legacy MongoDB 4.2 client.
+- Some MongoDB 8 operations can still hit removed legacy commands or old protocol assumptions.
+- Windows and Linux builds need their own dependency builds.
 
+## Driver Strategy
 
-About Robo 3T
-===============
+The project is moving toward two MongoDB backends:
 
-[Robo 3T](http://www.robomongo.org) (formerly Robomongo *) is a shell-centric cross-platform MongoDB management tool. Unlike most other MongoDB admin UI tools, Robo 3T embeds the actual `mongo` shell in a tabbed interface with access to a shell command line as well as GUI interaction.
+| Backend | Purpose | Status |
+| --- | --- | --- |
+| Legacy driver | Keep MongoDB 3.6 and older deployments usable | Active |
+| Modern driver | Proper MongoDB 7/8 support | Compatibility probe active |
 
-The latest stable release **Robo 3T 1.4** embeds **MongoDB 4.2** shell.   
+The app should choose the backend by server capability instead of forcing one driver to handle every MongoDB generation.
 
-Blog:     http://blog.robomongo.org/robo-3t-1-4/  
-Download: https://robomongo.org/download  
-All Releases: https://github.com/Studio3T/robomongo/releases  
-Watch: [Robo 3T Youtube channel](https://www.youtube.com/channel/UCM_7WAseRWeeiBikExppstA)  
-Follow: https://twitter.com/Robomongo
+That matters because MongoDB 8 can accept basic connections from the old client, but compatibility is not the same as correctness. Commands like `getLastError` no longer exist on modern servers, and auth, TLS, URI handling, write concern, and newer server features need a current driver.
 
-**Embedded MongoDB shell history:**  
-Robo 3T 1.4 -> MongoDB 4.2     
-Robo 3T 1.3 -> MongoDB 4.0     
-Robo 3T 1.1 -> MongoDB 3.4    
-Robo 3T 0.9 -> MongoDB 3.2  
-Robo 3T 0.8.x -> MongoDB 2.4.0  
+## Build Status
 
-\* [Robomongo has been acquired by 3T](https://studio3t.com/press/3t-software-labs-acquires-robomongo-the-most-widely-used-mongodb-tool/)
+The verified development target is currently macOS ARM64.
 
-What's new in latest Robo 3T 1.4?
-====================================
+The main app has been built as an ARM64 binary and launched successfully. The embedded MongoDB shell/client was rebuilt from the Robo 3T Mongo shell fork with ARM64 fixes for macOS.
 
-New Features:   
-  - Mongo shell 4.2 upgrade  
-  - Support for Ubuntu 20.04, macOS Big Sur and  macOS 10.15 (Catalina)   
-  - SSH: ECDSA and Ed25519 keys support on Windows & macOS (issues #1719, #1530, #1590)  
-  - Manually specify visible databases (issues #1696, #1368, #389)  
-  - New Welcome Tab - embeds Chromium using QtWebEngine (Windows, macOS only)  
-  - Import keys from old version: autoExpand, lineNumbers, debugMode and shellTimeoutSec  
-   
-Improvements:  
-  - Qt Upgrade (v5.12.8 - Apr/2020, Windows & macOS only)  
-  - OpenSSL upgrade (v1.1.1f - Mar/2020, Windows & macOS only)  
-  - libssh2 upgrade (v1.9.0 - Jun/2019, Windows & macOS only)  
-  - Database explorer section has smaller default width (#1556)
-  - Remember database explorer section size   
+Linux x64 should be the next most practical target. Windows x64 is possible, but it requires a separate MSVC/Qt/dependency build. Linux ARM64 is possible but will likely need architecture-specific dependency work similar to macOS ARM64.
 
-Fixes:  
-  - Fix previously broken IPv6 support from command line: robo3t --ipv6
-  - Fix crash when paging used in tabbed result window (#1661)
-  - Fix broken paging in DocumentDB (#1694)
-  - Authentication database option isn't used properly (#1696)  
-  - Add/Edit index ops fixed (re-written) (#1692)   
-  - Crash when expanding admin users (#1728)   
-  - Unable to run query after shell timeout reached (#1529)  
-  - Fix broken F2, F3, F4 shortcuts for tabbed result view
-  - One time re-order limit per new connections window to prevent data loss (macOS, #1790)  
-  - Fix crash when new shell tab executed in server unreachable case  
+## Build Outline
 
-Supported Platforms
-===============
+The build has two major stages:
 
-Note: This sections is for Robo 3T and it directly depends on what MongoDB suppports  
-(See: https://docs.mongodb.com/manual/administration/production-notes/#prod-notes-supported-platforms)
+1. Build the embedded Robo Mongo shell.
+2. Build the Robo 3T Qt application against that shell and the local dependencies.
 
-| MongoDB Versions      | MongoDB Cloud Platforms |
-| :-------------------- | :--------------------   | 
-| 4.2                   | Mongo Atlas             |
-| 4.0                   |
-| 3.6                   |
+For macOS ARM64, the current build expects:
 
-| Windows                |   Mac                            | Linux                       |        
-|:---------------------- | :--------------------------------| :---------------------------|
-| Windows 64-bit 10      |  Mac OS X 11    (Big Sur)     	  | Linux Ubuntu 20.04 64-bit  |
-  Windows 64-bit 8.1     |  Mac OS X 10.15 (Catalina)           | Linux Ubuntu 18.04 64-bit  |
-| Windows 64-bit 7       |  Mac OS X 10.14 (Mojave)      |   |
+- Xcode command line tools.
+- CMake.
+- Python 3.
+- Qt 5.
+- OpenSSL.
+- A compiled Robo Mongo shell 4.2 tree.
 
+Example app build shape:
 
-Contribute!
-===========
+```sh
+cmake -S . -B build/main-arm-v42 \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_OSX_ARCHITECTURES=arm64
 
-### Code Contributions
+cmake --build build/main-arm-v42 --target robomongo -j8
+```
 
-See all docs here: https://github.com/Studio3T/robomongo/wiki  
+The exact dependency paths depend on the local machine, so keep build configuration explicit rather than relying on global state.
 
-**Some important docs:**  
-- [Build Diagram](https://github.com/Studio3T/robomongo/wiki/Robo-3T-Schematics:-Build,-Class-and-UI-Diagrams#1-build-diagram)
-- [Static Code Analysis](https://github.com/Studio3T/robomongo/wiki/Static-Code-Analysis)
-- [Robo 3T Feature Specisification](https://github.com/Studio3T/robomongo/wiki/Feature-Spec)
-- [Debugging](https://github.com/Studio3T/robomongo/blob/master/docs/Debug.md)
-- [Schematics](https://github.com/Studio3T/robomongo/tree/master/schematics)
+## Testing MongoDB 8 Locally
 
-Code contributions are always welcome! Just try to follow our pre-commit checks and coding style: 
-- [Robo 3T Code Quality](https://github.com/paralect/robomongo/wiki/Robomongo-Code-Quality)
-- [Robo 3T C++11/14 Transition Guide](https://github.com/Studio3T/robomongo/wiki/Robomongo-Cplusplus-11,-14-Transition-Guide)
-- [Robo 3T Coding Style](https://github.com/paralect/robomongo/wiki/Robomongo-Coding-Style)
+A temporary MongoDB 8 server can be run with Docker:
 
-If you plan to contribute, please create a Github issue (or comment on the relevant existing issue) so we can help coordinate with upcoming release plans.
+```sh
+docker run --rm -d \
+  --name robo3t-mongo8-temp \
+  -p 27018:27017 \
+  public.ecr.aws/docker/library/mongo:8
+```
 
-Pull requests (PRs) should generally be for discrete issues (i.e. one issue per PR please) and be clean to merge against the current master branch. It would also be helpful if you can confirm what testing has been done (specific O/S targets and MongoDB versions if applicable).
+Use this URI in dino-robomongo:
 
-A usual naming approach for feature branches is `issue-###`. Include the issue number in your commit message / pull request description to link the PR to the original issue.
+```text
+mongodb://localhost:27018
+```
 
-For example:
-```#248: updated QScintilla to 2.4.8 for retina display support".```
+The connection settings test now shows which driver family is being used. Today that is:
 
-### Testing
+```text
+Legacy driver 4.2
+```
 
-- [Unit-Tests](https://github.com/Studio3T/robomongo/wiki/Unit-Tests)  
-- [Manual Tests](wiki/Tests)
-- See all docs here: https://github.com/Studio3T/robomongo/wiki  
+## Product Direction
 
-### Suggest Features
+The goal is not to turn dino-robomongo into a large database platform. The goal is to revive the compact native client:
 
-New feature suggestions or UI improvements are always welcome.
-[Create a new feature request on github](https://github.com/paralect/robomongo/issues/new)
+- Fast startup.
+- Clear database explorer.
+- Direct shell workflow.
+- Modern server compatibility.
+- No promotional startup screen.
+- Cross-platform builds.
+- Small, maintainable feature modules.
 
-This project is powered by open source volunteers, so we have a limited amount of development resource to address all requests. We will certainly make best efforts to progress (particularly for those with strong community upvotes).
+The modernization should stay pragmatic. Keep the old backend where it is still valuable, add a modern backend where it is required, and avoid rewriting unrelated UI until it blocks compatibility or maintainability.
 
+## Roadmap
 
-Download
-========
+Near term:
 
-You can download tested installer packages for macOS, Windows, and Linux from our site: [www.robomongo.org](http://www.robomongo.org).
+- Stabilize the macOS ARM64 build.
+- Add more MongoDB 8 smoke tests.
+- Replace more legacy write checks that depend on removed commands.
+- Keep the connection UI honest about driver family and version.
 
-Support
-=======
+Next:
 
-Robo 3T is an open source project driven by volunteers. We'll try to get to your questions as soon as we can, but please be patient :).
+- Introduce a modern MongoDB driver backend.
+- Route connections by server version or wire protocol capability.
+- Package macOS ARM64 builds.
+- Bring up Linux x64.
 
-You can:
+Later:
 
- - [Create a new issue in the Github issue queue](https://github.com/paralect/robomongo/issues)
+- Bring up Windows x64.
+- Evaluate Linux ARM64.
+- Remove old network/promotional code that no longer belongs in the app.
 
- - [Join developer discussion on Gitter](https://gitter.im/paralect/robomongo)
+## License
 
+This project descends from Robo 3T and remains under the GNU General Public License version 3.
 
-License
-=======
-
-Copyright 2014-2021 [3T Software Labs Ltd](https://studio3t.com/). All rights reserved.
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License version 3 as 
-published by the Free Software Foundation.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program. If not, see <http://www.gnu.org/licenses/>.
+Original copyright belongs to the Robo 3T / 3T Software Labs contributors.

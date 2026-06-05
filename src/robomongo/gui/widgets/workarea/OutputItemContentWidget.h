@@ -5,8 +5,11 @@
 #include "robomongo/core/Core.h"
 #include "robomongo/core/domain/MongoQueryInfo.h"
 #include "robomongo/core/domain/MongoAggregateInfo.h"
+#include "robomongo/core/domain/QueryResultFormatter.h"
 #include "robomongo/core/Enums.h"
 #include <vector>
+
+class QProgressDialog;
 
 namespace Robomongo
 {
@@ -19,6 +22,7 @@ namespace Robomongo
     class MongoShell;
     class OutputItemHeaderWidget;
     class OutputWidget;
+    class QueryResultExportLoadedEvent;
 
     class OutputItemContentWidget : public QWidget
     {
@@ -63,17 +67,25 @@ namespace Robomongo
         void showTree();        
         void showTable();
         void showCustom();
+        void exportResults();
+        void handle(QueryResultExportLoadedEvent *event);
 
     private Q_SLOTS:
         void jsonPartReady(const QString &json);
         void refresh(int skip, int batchSize);
         void paging_rightClicked(int skip, int batchSize);
-        void paging_leftClicked(int skip, int limit);      
+        void paging_leftClicked(int skip, int limit);
+        void cancelExport();
 
     private:
         void setup(double secs, bool multipleResults, bool tabbedResults, bool firstItem, bool lastItem);
         FindFrame *configureLogText();
         BsonTreeModel *configureModel();
+        int visibleDocumentCount() const;
+        std::vector<MongoDocumentPtr> visibleDocuments() const;
+        MongoQueryInfo exportQueryInfo(int requestedLimit) const;
+        bool writeExportFile(const std::vector<MongoDocumentPtr> &documents, const QString &filePath,
+                             QueryResultExportFormat format);
 
         FindFrame *_textView;
         BsonTreeView *_bsonTreeview;
@@ -105,5 +117,10 @@ namespace Robomongo
 
         bool _isFirstPartRendered;
         ViewMode _viewMode;
+        QProgressDialog *_exportProgress;
+        QString _exportFilePath;
+        QueryResultExportFormat _exportFormat;
+        int _activeExportRequestId;
+        bool _exportCanceled;
     };
 }

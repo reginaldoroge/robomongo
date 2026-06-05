@@ -238,6 +238,10 @@ namespace Robomongo
         if (event->connectionType != ConnectionTest)
             return;
 
+        _successful = true;
+        _driverName = event->connInfo._driverName;
+        _driverVersion = event->connInfo._driverVersion;
+        _maxWireVersion = event->connInfo._maxWireVersion;
         sshStatus(CompletedState);
         connectionStatus(CompletedState);
         authStatus(CompletedState);
@@ -251,6 +255,7 @@ namespace Robomongo
         if (event->connectionType != ConnectionTest || event->serverHandle != _serverHandle)
             return;
 
+        _successful = false;
         sshStatus(CompletedState);
         connectionStatus(CompletedState);
         authStatus(CompletedState);

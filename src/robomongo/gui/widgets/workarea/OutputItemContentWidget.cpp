@@ -1,14 +1,25 @@
 #include "robomongo/gui/widgets/workarea/OutputItemContentWidget.h"
 
+#include <QApplication>
+#include <QFileInfo>
+#include <QMessageBox>
+#include <QProgressDialog>
+#include <QSaveFile>
+#include <QTextStream>
 #include <QVBoxLayout>
 #include <Qsci/qscilexerjavascript.h>
 
 #include "robomongo/core/AppRegistry.h"
+#include "robomongo/core/EventBus.h"
+#include "robomongo/core/events/MongoEvents.h"
 #include "robomongo/core/settings/SettingsManager.h"
 #include "robomongo/core/utils/QtUtils.h"
 #include "robomongo/core/domain/MongoShell.h"
 #include "robomongo/core/domain/MongoAggregateInfo.h"
+#include "robomongo/core/domain/QueryResultExportPlan.h"
+#include "robomongo/core/domain/QueryResultFormatter.h"
 
+#include "robomongo/gui/dialogs/ResultExportDialog.h"
 #include "robomongo/gui/widgets/workarea/OutputWidget.h"
 #include "robomongo/gui/widgets/workarea/OutputItemHeaderWidget.h"
 #include "robomongo/gui/widgets/workarea/JsonPrepareThread.h"
@@ -21,6 +32,15 @@
 #include "robomongo/gui/GuiRegistry.h"
 #include "robomongo/gui/editors/JSLexer.h"
 #include "robomongo/gui/editors/FindFrame.h"
+
+namespace
+{
+    int nextExportRequestId()
+    {
+        static int requestId = 0;
+        return ++requestId;
+    }
+}
 
 namespace Robomongo
 {
@@ -49,7 +69,11 @@ namespace Robomongo
         _initialLimit(0),
         _mod(NULL),
         _viewMode(viewMode),
-        _aggrInfo(aggrInfo)
+        _aggrInfo(aggrInfo),
+        _exportProgress(NULL),
+        _exportFormat(QueryResultExportFormat::Json),
+        _activeExportRequestId(0),
+        _exportCanceled(false)
     {
         setup(secs, multipleResults, tabbedResults, firstItem, lastItem);
     }
@@ -84,7 +108,11 @@ namespace Robomongo
         _outputWidget(dynamic_cast<OutputWidget*>(parentWidget())),
         _mod(NULL),
         _viewMode(viewMode),
-        _aggrInfo(aggrInfo)
+        _aggrInfo(aggrInfo),
+        _exportProgress(NULL),
+        _exportFormat(QueryResultExportFormat::Json),
+        _activeExportRequestId(0),
+        _exportCanceled(false)
     {
         setup(secs, multipleResults, tabbedResults, firstItem, lastItem);
     }
@@ -94,6 +122,7 @@ namespace Robomongo
     {      
         setContentsMargins(0, 0, 0, 0);
         _header = new OutputItemHeaderWidget(this, multipleResults, tabbedResults, firstItem, lastItem);
+        AppRegistry::instance().bus()->subscribe(this, QueryResultExportLoadedEvent::Type, _shell);
 
         if (_queryInfo._info.isValid()) {
             _header->setCollection(QtUtils::toQString(_queryInfo._info._ns.collectionName()));
@@ -211,6 +240,151 @@ namespace Robomongo
         }
         else
             _shell->query(_outputWidget->resultIndex(this), info);
+    }
+
+    void OutputItemContentWidget::exportResults()
+    {
+        ResultExportDialog dialog(
+            _queryInfo._info.isValid(),
+            visibleDocumentCount(),
+            _header->paging()->batchSize(),
+            this);
+        if (dialog.exec() != QDialog::Accepted)
+            return;
+
+        const ResultExportSelection selection = dialog.selection();
+        if (selection.scope == ResultExportScope::VisibleResults) {
+            writeExportFile(visibleDocuments(), selection.filePath, selection.format);
+            return;
+        }
+
+        _exportFilePath = selection.filePath;
+        _exportFormat = selection.format;
+        _exportCanceled = false;
+        _activeExportRequestId = nextExportRequestId();
+
+        if (_exportProgress) {
+            _exportProgress->close();
+            _exportProgress->deleteLater();
+        }
+
+        _exportProgress = new QProgressDialog("Loading all query results...", "Cancel", 0, 0, this);
+        _exportProgress->setWindowModality(Qt::WindowModal);
+        _exportProgress->setMinimumDuration(0);
+        VERIFY(connect(_exportProgress, SIGNAL(canceled()), this, SLOT(cancelExport())));
+        _exportProgress->show();
+
+        const int requestedLimit = selection.scope == ResultExportScope::LimitedQueryResults
+            ? selection.limit
+            : 0;
+        _shell->exportQuery(_activeExportRequestId, exportQueryInfo(requestedLimit));
+    }
+
+    void OutputItemContentWidget::handle(QueryResultExportLoadedEvent *event)
+    {
+        if (event->requestId() != _activeExportRequestId)
+            return;
+
+        if (_exportProgress) {
+            _exportProgress->close();
+            _exportProgress->deleteLater();
+            _exportProgress = NULL;
+        }
+
+        const bool wasCanceled = _exportCanceled;
+        _exportCanceled = false;
+        _activeExportRequestId = 0;
+
+        if (wasCanceled)
+            return;
+
+        if (event->isError()) {
+            QMessageBox::critical(this, "Export Results",
+                                  QString("Failed to export results.\n\n%1")
+                                  .arg(QtUtils::toQString(event->error().errorMessage())));
+            return;
+        }
+
+        writeExportFile(event->documents(), _exportFilePath, _exportFormat);
+    }
+
+    void OutputItemContentWidget::cancelExport()
+    {
+        _exportCanceled = true;
+
+        if (_exportProgress) {
+            _exportProgress->close();
+            _exportProgress->deleteLater();
+            _exportProgress = NULL;
+        }
+    }
+
+    int OutputItemContentWidget::visibleDocumentCount() const
+    {
+        const int batchSize = _header->paging()->batchSize();
+        if (batchSize <= 0 || batchSize > static_cast<int>(_documents.size()))
+            return static_cast<int>(_documents.size());
+
+        return batchSize;
+    }
+
+    std::vector<MongoDocumentPtr> OutputItemContentWidget::visibleDocuments() const
+    {
+        const int visibleCount = visibleDocumentCount();
+        return std::vector<MongoDocumentPtr>(
+            _documents.begin(), _documents.begin() + visibleCount);
+    }
+
+    MongoQueryInfo OutputItemContentWidget::exportQueryInfo(int requestedLimit) const
+    {
+        MongoQueryInfo info(_queryInfo);
+        info._skip = _initialSkip;
+        info._limit = QueryResultExportPlan::effectiveLimit(_initialLimit, requestedLimit);
+        return info;
+    }
+
+    bool OutputItemContentWidget::writeExportFile(
+        const std::vector<MongoDocumentPtr> &documents, const QString &filePath,
+        QueryResultExportFormat format)
+    {
+        QSaveFile file(filePath);
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            QMessageBox::critical(this, "Export Results",
+                                  QString("Cannot write to file.\n\n%1").arg(file.errorString()));
+            return false;
+        }
+
+        QApplication::setOverrideCursor(Qt::WaitCursor);
+        const QString payload = QueryResultFormatter::format(
+            documents,
+            format,
+            AppRegistry::instance().settingsManager()->uuidEncoding(),
+            AppRegistry::instance().settingsManager()->timeZone());
+        QApplication::restoreOverrideCursor();
+
+        QTextStream stream(&file);
+        stream.setCodec("UTF-8");
+        stream << payload;
+        stream.flush();
+
+        if (stream.status() != QTextStream::Ok) {
+            file.cancelWriting();
+            QMessageBox::critical(this, "Export Results", "Failed while writing the export file.");
+            return false;
+        }
+
+        if (!file.commit()) {
+            QMessageBox::critical(this, "Export Results",
+                                  QString("Cannot save file.\n\n%1").arg(file.errorString()));
+            return false;
+        }
+
+        QMessageBox::information(
+            this, "Export Results",
+            QString("Exported %1 document(s) to %2.")
+                .arg(static_cast<int>(documents.size()))
+                .arg(QFileInfo(filePath).fileName()));
+        return true;
     }
 
     void OutputItemContentWidget::updateWithInfo(const MongoQueryInfo &inf, 

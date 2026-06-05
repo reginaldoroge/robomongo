@@ -35,12 +35,20 @@ namespace Robomongo
         ConnectionInfo(std::string const& uuid);
         ConnectionInfo(const std::string &address, const std::vector<std::string> &databases, float version, 
                        const std::string& dbVersionStr, const std::string& storageEngine, 
-                       std::string const& uuid);
+                       std::string const& uuid, const std::string &driverName = "Legacy driver",
+                       const std::string &driverVersion = "4.2", int maxWireVersion = 0);
         const std::string _address;
         const std::vector<std::string> _databases;
         const float _version;
         const std::string _dbVersionStr;
         const std::string _storageEngineType;
         std::string const _uuid;
+        const std::string _driverName;
+        const std::string _driverVersion;
+        const int _maxWireVersion;
     };
+
+    IndexInfo makeIndexInfoFromBsonObj(
+        const MongoCollectionInfo &collection,
+        const mongo::BSONObj &obj);
 }

@@ -15,6 +15,25 @@
 
 namespace Robomongo
 {
+    namespace
+    {
+        QString formatStorageSize(double bytes)
+        {
+            const char *units[] = { "B", "KB", "MB", "GB", "TB" };
+            int unit = 0;
+            double value = bytes;
+
+            while (value >= 1024.0 && unit < 4) {
+                value /= 1024.0;
+                ++unit;
+            }
+
+            return unit == 0
+                ? QString("%1 %2").arg(static_cast<qlonglong>(value)).arg(units[unit])
+                : QString("%1 %2").arg(value, 0, 'f', 1).arg(units[unit]);
+        }
+    }
+
     ExplorerCollectionIndexItem::ExplorerCollectionIndexItem(
         ExplorerCollectionIndexesDir *parent, const IndexInfo &info)
         : BaseClass(parent), _info(info)
@@ -31,10 +50,18 @@ namespace Robomongo
         setIcon(0, Robomongo::GuiRegistry::instance().indexIcon());
     }
 
+    void ExplorerCollectionIndexItem::setStorageSize(double storageSizeBytes)
+    {
+        setText(0, QString("%1  %2").arg(
+            QtUtils::toQString(_info._name),
+            formatStorageSize(storageSizeBytes)));
+    }
+
     void ExplorerCollectionIndexItem::ui_dropIndex()
     {
         // Ask user
-        auto const answer = utils::questionDialog(treeWidget(), "Drop", "Index", text(0));
+        auto const answer = utils::questionDialog(
+            treeWidget(), "Drop", "Index", QtUtils::toQString(name()));
         if (answer != QMessageBox::Yes)
             return;
 

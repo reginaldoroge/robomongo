@@ -17,6 +17,7 @@ namespace Robomongo
 
         void open(const std::string &script, const std::string &dbName = std::string());
         void query(int resultIndex, const MongoQueryInfo &info);
+        void exportQuery(int requestId, const MongoQueryInfo &info);
         void autocomplete(const std::string &prefix);
         void stop();
         MongoServer *server() const { return _server; }
@@ -37,6 +38,7 @@ namespace Robomongo
 
     protected Q_SLOTS:
         void handle(ExecuteQueryResponse *event);
+        void handle(ExportQueryResponse *event);
         void handle(ExecuteScriptResponse *event);
         void handle(AutocompleteResponse *event);
 

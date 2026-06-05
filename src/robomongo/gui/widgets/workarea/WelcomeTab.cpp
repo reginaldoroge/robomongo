@@ -6,23 +6,167 @@
 #include <QDesktopServices>
 
 namespace Robomongo {
+    namespace {
+        QString revivalWelcomeHtml()
+        {
+            return QStringLiteral(R"(
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #f6f7f8;
+      color: #202124;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .page {
+      max-width: 980px;
+      padding: 54px 58px 70px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      margin-bottom: 34px;
+    }
+    .mark {
+      width: 54px;
+      height: 54px;
+      border-radius: 12px;
+      background: #23b66f;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 29px;
+      font-weight: 800;
+    }
+    h1 {
+      margin: 0;
+      font-size: 42px;
+      line-height: 1.08;
+      font-weight: 750;
+      letter-spacing: 0;
+    }
+    .subtitle {
+      margin: 12px 0 34px;
+      font-size: 20px;
+      line-height: 1.45;
+      color: #4d5156;
+      max-width: 820px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin: 30px 0;
+    }
+    .panel {
+      background: white;
+      border: 1px solid #dde1e6;
+      border-radius: 8px;
+      padding: 18px 20px;
+    }
+    .panel h2 {
+      margin: 0 0 9px;
+      font-size: 17px;
+    }
+    .panel p, li {
+      color: #4d5156;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    ul {
+      padding-left: 19px;
+      margin: 10px 0 0;
+    }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 11px;
+      border: 1px solid #e4c65a;
+      background: #fff8dc;
+      border-radius: 6px;
+      color: #684b00;
+      font-weight: 650;
+      font-size: 14px;
+    }
+    .footer {
+      margin-top: 30px;
+      color: #5f6368;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="brand">
+      <div class="mark">D</div>
+      <div>
+        <h1>dino-robomongo 2.0.0</h1>
+        <div class="subtitle">A lightweight MongoDB desktop client revived for current machines, modern builds, and explicit driver compatibility.</div>
+      </div>
+    </div>
+
+    <div class="status">Legacy 4.2 + Modern mongocxx compatibility probe</div>
+
+    <section class="grid">
+      <div class="panel">
+        <h2>What changed</h2>
+        <ul>
+          <li>Native macOS ARM64 build is working.</li>
+          <li>The old promotional welcome screen is gone.</li>
+          <li>Connection testing now shows which driver family is active.</li>
+          <li>MongoDB 8 test connections now probe the server through the modern driver.</li>
+        </ul>
+      </div>
+
+      <div class="panel">
+        <h2>Driver plan</h2>
+        <p>The app now carries both the legacy MongoDB 4.2 path and a modern mongocxx path for server capability detection.</p>
+        <p>The next step is moving query execution and write flows to the modern backend for MongoDB 7 and 8.</p>
+      </div>
+
+      <div class="panel">
+        <h2>Why revive it</h2>
+        <p>dino-robomongo keeps the direct, native, shell-centric workflow and removes the stale promotional surface.</p>
+      </div>
+
+      <div class="panel">
+        <h2>Compatibility target</h2>
+        <ul>
+          <li>Legacy backend: MongoDB 3.6 and older-compatible flows.</li>
+          <li>Modern backend: active compatibility probe for MongoDB 6, 7 and 8.</li>
+          <li>Cross-platform builds: macOS first, then Linux x64, then Windows x64.</li>
+        </ul>
+      </div>
+    </section>
+
+    <p class="footer">This is a revival build. The connection test can identify the modern driver path now; full shell/query execution migration is the next compatibility milestone.</p>
+  </main>
+</body>
+</html>
+)");
+        }
+    }
 
     // ------------------ WelcomeTab
     WelcomeTab::WelcomeTab(QScrollArea *parent) :
         QWidget(parent), _parent(parent)
     {
         auto webView = new QWebEngineView(this);
-        QUrl const URL {
-            "http://files.studio3t.com/rm-feed_3t_io/1.4.3/index.html"        
-        };
         webView->setPage(new MyWebPage(this));
-        webView->page()->setUrl(URL);
+        webView->page()->setHtml(revivalWelcomeHtml(), QUrl("about:welcome"));
         webView->setContextMenuPolicy(Qt::NoContextMenu);
-        webView->page()->triggerAction(QWebEnginePage::WebAction::ReloadAndBypassCache);
         webView->page()->profile()->setHttpCacheType(QWebEngineProfile::HttpCacheType::NoCache);
 
         auto mainLayout = new QHBoxLayout;
-        mainLayout->setContentsMargins(-10, -10, -1, -1);
+        mainLayout->setContentsMargins(0, 0, 0, 0);
         mainLayout->setSizeConstraint(QLayout::SetMinimumSize);
         mainLayout->addWidget(webView);
         setLayout(mainLayout);

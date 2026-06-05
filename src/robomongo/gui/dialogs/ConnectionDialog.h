@@ -5,6 +5,9 @@
 #include "robomongo/core/Core.h"
 #include "robomongo/gui/utils/GuiConstants.h"
 
+class QLabel;
+class QWidget;
+
 namespace Robomongo
 {
     class ConnectionSettings;
@@ -65,12 +68,16 @@ namespace Robomongo
         void restoreWindowSettings();
         void saveWindowSettings() const;
         bool validateAndApply();
+        void showDriverStatus(const std::string &driverName, const std::string &driverVersion, int maxWireVersion);
         
         ConnectionAuthTab *_authTab = nullptr;
         ConnectionBasicTab *_basicTab = nullptr;
         ConnectionAdvancedTab *_advancedTab = nullptr;
         SshTunnelTab *_sshTab = nullptr;
         SSLTab *_sslTab = nullptr;
+        QWidget *_driverStatus = nullptr;
+        QLabel *_driverStatusIcon = nullptr;
+        QLabel *_driverStatusText = nullptr;
 
 #ifdef SSH_SUPPORT_ENABLED
         SshTunnelTab *_sshTab;

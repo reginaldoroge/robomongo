@@ -79,6 +79,14 @@ namespace Robomongo
         _customButton->setFlat(true);
         _customButton->setCheckable(true);
 
+        // Export button
+        _exportButton = new QPushButton(this);
+        _exportButton->hide();
+        _exportButton->setIcon(GuiRegistry::instance().exportIcon());
+        _exportButton->setToolTip("Export query results");
+        _exportButton->setFixedSize(24, 24);
+        _exportButton->setFlat(true);
+
         // Create maximize button only if there are multiple results
         if (_multipleResults && !tabbedResults) {
             _maxButton = new QPushButton;
@@ -103,6 +111,7 @@ namespace Robomongo
         VERIFY(connect(_treeButton, SIGNAL(clicked()), outputItemContentWidget, SLOT(showTree())));
         VERIFY(connect(_tableButton, SIGNAL(clicked()), outputItemContentWidget, SLOT(showTable())));
         VERIFY(connect(_customButton, SIGNAL(clicked()), outputItemContentWidget, SLOT(showCustom())));
+        VERIFY(connect(_exportButton, SIGNAL(clicked()), outputItemContentWidget, SLOT(exportResults())));
 
         _collectionIndicator = new Indicator(GuiRegistry::instance().collectionIcon());
         _timeIndicator = new Indicator(GuiRegistry::instance().timeIcon());
@@ -123,6 +132,10 @@ namespace Robomongo
         layout->addWidget(_timeIndicator);
         QSpacerItem *hSpacer = new QSpacerItem(2000, 24, QSizePolicy::Preferred, QSizePolicy::Minimum);
         layout->addSpacerItem(hSpacer);
+        if (outputItemContentWidget->isTreeModeSupported()) {
+            layout->addWidget(_exportButton, 0, Qt::AlignRight);
+            _exportButton->show();
+        }
         layout->addWidget(_paging);
         layout->addWidget(createVerticalLine());
         layout->addSpacing(2);

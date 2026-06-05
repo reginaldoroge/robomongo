@@ -1,19 +1,33 @@
 cmake_minimum_required(VERSION 3.8.0)
-project(Robomongo)
+project(DinoRobomongo)
 
 # Where to look first for CMake modules, before "${CMAKE_ROOT}/Modules" is checked
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
+option(ROBO3T_BUILD_ARM_DRIVER_PROBE "Build only the native ARM MongoDB driver probe." OFF)
+
 # Project version
-set(PROJECT_VERSION_MAJOR "1")
-set(PROJECT_VERSION_MINOR "4")
-set(PROJECT_VERSION_PATCH "4")
+set(PROJECT_VERSION_MAJOR "2")
+set(PROJECT_VERSION_MINOR "0")
+set(PROJECT_VERSION_PATCH "0")
 set(PROJECT_VERSION_BUILD "")
 set(PROJECT_VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}${PROJECT_VERSION_BUILD}")
 
 # Enable C++17 features 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+if(ROBO3T_BUILD_ARM_DRIVER_PROBE)
+    set(CMAKE_AUTOMOC ON)
+    include(RobomongoPrintUtils)
+    include(RobomongoCMakeDefaults)
+    include(RobomongoDefaults)
+    find_package(Qt5Core REQUIRED)
+    find_package(Qt5Widgets REQUIRED)
+    find_package(MongoCxx REQUIRED)
+    add_subdirectory(src/robo3t-modern)
+    return()
+endif()
 
 # Modules
 include(RobomongoPrintUtils)
@@ -37,6 +51,7 @@ if(NOT SYSTEM_LINUX)
     find_package(Qt5WebEngineWidgets REQUIRED)
 endif()
 find_package(MongoDB REQUIRED)
+find_package(MongoCxx REQUIRED)
 find_package(OpenSSL REQUIRED)
 
 if (SYSTEM_MACOSX)

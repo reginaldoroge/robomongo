@@ -8,30 +8,47 @@
 
 namespace
 {
-    Robomongo::IndexInfo makeIndexInfoFromBsonObj(
-        const Robomongo::MongoCollectionInfo &collection,
-        const mongo::BSONObj &obj)
+    double numberField(const mongo::BSONObj &obj, const char *fieldName)
     {
-        using namespace Robomongo::BsonUtils;
-        Robomongo::IndexInfo info(collection);
-        info._name = obj.getStringField("name");
-        mongo::BSONObj keyObj = obj.getObjectField("key");
-        if (keyObj.isValid()) 
-            info._keys = jsonString(keyObj, mongo::TenGen, 1, Robomongo::DefaultEncoding, Robomongo::Utc);
+        mongo::BSONElement elem = obj.getField(fieldName);
+        if (elem.eoo() || !elem.isNumber())
+            return 0;
 
-        info._unique = obj.getBoolField("unique");
-        info._backGround = obj.getBoolField("background");
-        info._sparse = obj.getBoolField("sparse");
-        info._ttl = obj.getIntField("expireAfterSeconds");
-        info._defaultLanguage = obj.getStringField("default_language");
-        info._languageOverride = obj.getStringField("language_override");
-        mongo::BSONObj weightsObj = obj.getObjectField("weights");
-        if (weightsObj.isValid()) 
-            info._textWeights = jsonString(weightsObj, mongo::TenGen, 1, Robomongo::DefaultEncoding, 
-                                           Robomongo::Utc);
-
-        return info;
+        return elem.numberDouble();
     }
+
+    std::vector<std::pair<std::string, double>> indexSizesFrom(const mongo::BSONObj &stats)
+    {
+        std::vector<std::pair<std::string, double>> result;
+        mongo::BSONElement elem = stats.getField("indexSizes");
+
+        if (elem.eoo() || !elem.isABSONObj())
+            return result;
+
+        mongo::BSONObj sizes = elem.Obj();
+        for (mongo::BSONObjIterator it(sizes); it.more();) {
+            mongo::BSONElement indexSize = it.next();
+            if (indexSize.isNumber())
+                result.push_back(std::make_pair(indexSize.fieldName(), indexSize.numberDouble()));
+        }
+
+        return result;
+    }
+
+    bool isGetLastErrorUnsupported(const std::string &error)
+    {
+        return error.find("getlasterror") != std::string::npos &&
+               error.find("no such command") != std::string::npos;
+    }
+
+    void throwUnlessGetLastErrorUnsupported(const std::string &error)
+    {
+        if (error.empty() || isGetLastErrorUnsupported(error))
+            return;
+
+        throw std::runtime_error(error);
+    }
+
 }
 
 namespace Robomongo
@@ -240,8 +257,7 @@ namespace Robomongo
         }
 
         std::string const errorStr = _dbclient->getLastError();
-        if (!errorStr.empty())
-            throw std::runtime_error(errorStr);
+        throwUnlessGetLastErrorUnsupported(errorStr);
     }
 
     void MongoClient::renameIndexFromCollection(const MongoCollectionInfo &collection, const std::string &oldIndexName, const std::string &newIndexName) const
@@ -304,8 +320,7 @@ namespace Robomongo
         if (existingFunctionName.empty()) { // create new function
             _dbclient->insert(ns.toString(), obj);
             std::string errorStr = _dbclient->getLastError();
-            if (!errorStr.empty())
-                throw std::runtime_error(errorStr/* , 0 */);
+            throwUnlessGetLastErrorUnsupported(errorStr);
         } else { // this is update
 
             std::string name = fun.name();
@@ -318,14 +333,13 @@ namespace Robomongo
 
                 _dbclient->update(ns.toString(), query, obj, true, false);
                 std::string errorStr = _dbclient->getLastError();
-                if (!errorStr.empty())
-                    throw std::runtime_error(errorStr);
+                throwUnlessGetLastErrorUnsupported(errorStr);
             } else {    // update function name (remove & insert)
                 _dbclient->insert(ns.toString(), obj);
                 std::string errorStr = _dbclient->getLastError();
 
                 // if no errors
-                if (errorStr.empty()) {
+                if (errorStr.empty() || isGetLastErrorUnsupported(errorStr)) {
                     mongo::BSONObjBuilder builder;
                     builder.append("_id", existingFunctionName);
                     mongo::BSONObj bsonQuery = builder.obj();
@@ -350,8 +364,7 @@ namespace Robomongo
 
         _dbclient->remove(ns.toString(), query, true);
         std::string errorStr = _dbclient->getLastError();
-        if (!errorStr.empty())
-            throw std::runtime_error(errorStr);
+        throwUnlessGetLastErrorUnsupported(errorStr);
     }
 
     void MongoClient::createDatabase(const std::string &dbName)
@@ -375,8 +388,7 @@ namespace Robomongo
         // Insert this document
         _dbclient->insert(ns.toString(), obj);
         std::string errorStr = _dbclient->getLastError();
-        if (!errorStr.empty())
-            throw std::runtime_error(errorStr);
+        throwUnlessGetLastErrorUnsupported(errorStr);
 
         // Drop temp collection
         _dbclient->dropCollection(ns.toString());
@@ -608,6 +620,30 @@ namespace Robomongo
         return infos;
     }
 
+    MongoDatabaseStorageStats MongoClient::loadStorageStats(const std::string &dbName) const
+    {
+        MongoDatabaseStorageStats stats(dbName);
+
+        mongo::BSONObj dbStatsResult;
+        if (_dbclient->runCommand(dbName, BSON("dbStats" << 1 << "scale" << 1), dbStatsResult))
+            stats.storageSizeBytes = numberField(dbStatsResult, "storageSize");
+
+        for (const auto &ns : getCollectionNamesWithDbname(dbName)) {
+            MongoNamespace mongoNs(ns);
+            mongo::BSONObj result;
+            mongo::BSONObj command = BSON("collStats" << mongoNs.collectionName() << "scale" << 1);
+
+            if (_dbclient->runCommand(dbName, command, result)) {
+                MongoCollectionStorageStats collectionStats(
+                    mongoNs.collectionName(), numberField(result, "storageSize"));
+                collectionStats.indexSizes = indexSizesFrom(result);
+                stats.collections.push_back(collectionStats);
+            }
+        }
+
+        return stats;
+    }
+
     void MongoClient::done()
     {
         // do nothing here, because we are not using ScopedDbConnection now
@@ -617,9 +653,6 @@ namespace Robomongo
     void MongoClient::checkLastErrorAndThrow(const std::string &db)
     {
         std::string const lastError = _dbclient->getLastError(db);        
-        if (lastError.empty())
-            return;
-
-        throw std::runtime_error(lastError/*, mongo::ErrorCodes::InternalError*/);
+        throwUnlessGetLastErrorUnsupported(lastError);
     }
 }

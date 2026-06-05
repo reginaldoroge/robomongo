@@ -31,6 +31,22 @@ namespace
         "<tr><td>Size:</td><td><b>&nbsp;&nbsp;%s</b></td></tr>"
         "</table>"
         ;
+
+    QString formatStorageSize(double bytes)
+    {
+        const char *units[] = { "B", "KB", "MB", "GB", "TB" };
+        int unit = 0;
+        double value = bytes;
+
+        while (value >= 1024.0 && unit < 4) {
+            value /= 1024.0;
+            ++unit;
+        }
+
+        return unit == 0
+            ? QString("%1 %2").arg(static_cast<qlonglong>(value)).arg(units[unit])
+            : QString("%1 %2").arg(value, 0, 'f', 1).arg(units[unit]);
+    }
 }
 
 namespace Robomongo
@@ -117,6 +133,36 @@ namespace Robomongo
         setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
     }
 
+    void ExplorerCollectionTreeItem::setStorageSize(double storageSizeBytes)
+    {
+        setText(0, QString("%1  %2").arg(
+            QtUtils::toQString(_collection->name()),
+            formatStorageSize(storageSizeBytes)));
+    }
+
+    void ExplorerCollectionTreeItem::setIndexStorageSizes(
+        const std::vector<std::pair<std::string, double>> &indexSizes)
+    {
+        _pendingIndexSizes = indexSizes;
+        for (const auto &indexSize : indexSizes) {
+            for (int i = 0; i < _indexDir->childCount(); ++i) {
+                auto item = dynamic_cast<ExplorerCollectionIndexItem *>(_indexDir->child(i));
+                if (item && item->name() == indexSize.first)
+                    item->setStorageSize(indexSize.second);
+            }
+        }
+    }
+
+    void ExplorerCollectionTreeItem::refreshIndexesWithSizes(
+        const std::vector<std::pair<std::string, double>> &indexSizes)
+    {
+        setIndexStorageSizes(indexSizes);
+        _indexDir->setText(0, detail::buildName("Indexes", indexSizes.size()));
+
+        if (_indexDir->isExpanded())
+            expand();
+    }
+
     void ExplorerCollectionTreeItem::handle(LoadCollectionIndexesResponse *event)
     {
         if (event->isError()) {
@@ -141,6 +187,7 @@ namespace Robomongo
         for (std::vector<IndexInfo>::const_iterator it = indexes.begin(); it != indexes.end(); ++it) {
             _indexDir->addChild(new ExplorerCollectionIndexItem(_indexDir, *it));
         }
+        setIndexStorageSizes(_pendingIndexSizes);
         _indexDir->setText(0, detail::buildName("Indexes", _indexDir->childCount()));
     }
 
@@ -178,9 +225,10 @@ namespace Robomongo
 
         for (int i = 0; i < _indexDir->childCount(); ++i) {
             QTreeWidgetItem *item = _indexDir->child(i);
-            if (item->text(0) == QString::fromStdString(event->index())) {
-                removeChild(item);
-                delete item;
+            auto indexItem = dynamic_cast<ExplorerCollectionIndexItem *>(item);
+            if (indexItem && indexItem->name() == event->index()) {
+                _indexDir->removeChild(item);
+                delete indexItem;
                 break;
             }
         }        
@@ -204,12 +252,12 @@ namespace Robomongo
          }
     }
 
-    void ExplorerCollectionTreeItem::dropIndex(const QTreeWidgetItem * const ind)
+    void ExplorerCollectionTreeItem::dropIndex(const ExplorerCollectionIndexItem *const ind)
     {
         if (!_databaseItem)
             return;
 
-        _databaseItem->dropIndexFromCollection(this, QtUtils::toStdString(ind->text(0)));
+        _databaseItem->dropIndexFromCollection(this, ind->name());
     }
 
     QString ExplorerCollectionTreeItem::buildToolTip(MongoCollection *collection)

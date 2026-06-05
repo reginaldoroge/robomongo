@@ -16,10 +16,6 @@ Diagnostic of dependencies
 
 GUI: http://dependencywalker.com/
 
-CMD LINE:   
-Open Visual Studio Native command prompt  
-`dumpbin /dependents robo3t.exe`
-
 ### Linux
 
 #### a. View dependencies of executable or shared library: 

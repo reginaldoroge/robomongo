@@ -105,6 +105,24 @@ namespace Robomongo
         }
     }
 
+    void ExplorerServerTreeItem::refreshStorageStats()
+    {
+        for (int i = 0; i < childCount(); ++i) {
+            auto dbItem = dynamic_cast<ExplorerDatabaseTreeItem *>(child(i));
+            if (dbItem)
+                dbItem->refreshStorageStats();
+        }
+
+        if (!_systemFolder)
+            return;
+
+        for (int i = 0; i < _systemFolder->childCount(); ++i) {
+            auto dbItem = dynamic_cast<ExplorerDatabaseTreeItem *>(_systemFolder->child(i));
+            if (dbItem)
+                dbItem->refreshStorageStats();
+        }
+    }
+
     void ExplorerServerTreeItem::disableSomeContextMenuActions(bool disable)
     {
         if (BaseClass::_contextMenu->actions().size() < 10 || 

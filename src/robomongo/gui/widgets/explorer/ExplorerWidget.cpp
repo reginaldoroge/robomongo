@@ -14,6 +14,7 @@
 #include "robomongo/gui/widgets/explorer/ExplorerCollectionTreeItem.h"
 #include "robomongo/gui/widgets/explorer/ExplorerCollectionIndexesDir.h"
 #include "robomongo/gui/widgets/explorer/ExplorerDatabaseCategoryTreeItem.h"
+#include "robomongo/gui/widgets/explorer/ExplorerDatabaseTreeItem.h"
 #include "robomongo/gui/widgets/explorer/ExplorerReplicaSetTreeItem.h"
 #include "robomongo/gui/widgets/explorer/ExplorerReplicaSetFolderItem.h"
 #include "robomongo/gui/widgets/explorer/ExplorerUserTreeItem.h"
@@ -52,6 +53,40 @@ namespace Robomongo
     QTreeWidgetItem* ExplorerWidget::getSelectedTreeItem() const
     {
         return _treeWidget->currentItem();
+    }
+
+    void ExplorerWidget::refreshStorageStats()
+    {
+        QTreeWidgetItem *selectedItem = getSelectedTreeItem();
+
+        if (auto collectionItem = dynamic_cast<ExplorerCollectionTreeItem *>(selectedItem)) {
+            collectionItem->databaseItem()->refreshStorageStats();
+            return;
+        }
+
+        if (auto databaseItem = dynamic_cast<ExplorerDatabaseTreeItem *>(selectedItem)) {
+            databaseItem->refreshStorageStats();
+            return;
+        }
+
+        if (auto categoryItem = dynamic_cast<ExplorerDatabaseCategoryTreeItem *>(selectedItem)) {
+            auto databaseItem = dynamic_cast<ExplorerDatabaseTreeItem *>(categoryItem->parent());
+            if (databaseItem) {
+                databaseItem->refreshStorageStats();
+                return;
+            }
+        }
+
+        if (auto serverItem = dynamic_cast<ExplorerServerTreeItem *>(selectedItem)) {
+            serverItem->refreshStorageStats();
+            return;
+        }
+
+        for (int i = 0; i < _treeWidget->topLevelItemCount(); ++i) {
+            auto serverItem = dynamic_cast<ExplorerServerTreeItem *>(_treeWidget->topLevelItem(i));
+            if (serverItem)
+                serverItem->refreshStorageStats();
+        }
     }
 
     void ExplorerWidget::keyPressEvent(QKeyEvent *event)

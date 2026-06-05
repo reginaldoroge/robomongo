@@ -53,6 +53,11 @@ namespace Robomongo
         eventBus()->send(_server->worker(), new ExecuteQueryRequest(this, resultIndex, info));
     }
 
+    void MongoShell::exportQuery(int requestId, const MongoQueryInfo &info)
+    {
+        eventBus()->send(_server->worker(), new ExportQueryRequest(this, requestId, info));
+    }
+
     void MongoShell::autocomplete(const std::string &prefix)
     {
         AutocompletionMode autocompletionMode {
@@ -97,6 +102,20 @@ namespace Robomongo
         eventBus()->publish(
             new DocumentListLoadedEvent(this, 
                 event->resultIndex, event->queryInfo, query(), event->documents)
+        );
+    }
+
+    void MongoShell::handle(ExportQueryResponse *event)
+    {
+        if (event->isError()) {
+            eventBus()->publish(
+                new QueryResultExportLoadedEvent(this, event->requestId(), event->error())
+            );
+            return;
+        }
+
+        eventBus()->publish(
+            new QueryResultExportLoadedEvent(this, event->requestId(), event->documents())
         );
     }
 

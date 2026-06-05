@@ -8,6 +8,8 @@
 #include <QApplication>
 #include <QDialogButtonBox>
 #include <QSettings>
+#include <QLabel>
+#include <QStyle>
 
 #include "robomongo/core/utils/QtUtils.h"
 #include "robomongo/gui/GuiRegistry.h"
@@ -34,8 +36,21 @@ namespace Robomongo
         testButton->setIcon(qApp->style()->standardIcon(QStyle::SP_MessageBoxInformation));
         VERIFY(connect(testButton, SIGNAL(clicked()), this, SLOT(testConnection())));
 
+        _driverStatus = new QWidget(this);
+        _driverStatusIcon = new QLabel(_driverStatus);
+        _driverStatusText = new QLabel(_driverStatus);
+        QHBoxLayout *driverStatusLayout = new QHBoxLayout(_driverStatus);
+        driverStatusLayout->setContentsMargins(0, 0, 0, 0);
+        driverStatusLayout->setSpacing(5);
+        driverStatusLayout->addWidget(_driverStatusIcon, 0, Qt::AlignVCenter);
+        driverStatusLayout->addWidget(_driverStatusText, 0, Qt::AlignVCenter);
+        _driverStatus->setVisible(false);
+
         QHBoxLayout *bottomLayout = new QHBoxLayout;
-        bottomLayout->addWidget(testButton, 1, Qt::AlignLeft);
+        bottomLayout->addWidget(testButton, 0, Qt::AlignLeft);
+        bottomLayout->addSpacing(12);
+        bottomLayout->addWidget(_driverStatus, 0, Qt::AlignLeft);
+        bottomLayout->addStretch(1);
         QDialogButtonBox *buttonBox = new QDialogButtonBox(this);
         buttonBox->setOrientation(Qt::Horizontal);
         buttonBox->setStandardButtons(QDialogButtonBox::Cancel | QDialogButtonBox::Save);
@@ -178,5 +193,25 @@ namespace Robomongo
             return;
 
         diag.exec();
+        if (diag.isSuccessful())
+            showDriverStatus(diag.driverName(), diag.driverVersion(), diag.maxWireVersion());
+    }
+
+    void ConnectionDialog::showDriverStatus(const std::string &driverName, const std::string &driverVersion, int maxWireVersion)
+    {
+        const bool modern = driverName.find("Modern") != std::string::npos;
+        _driverStatusIcon->setPixmap(qApp->style()->standardIcon(
+            modern ? QStyle::SP_DialogApplyButton : QStyle::SP_MessageBoxWarning).pixmap(16, 16));
+
+        const QString color = modern ? "#166534" : "#7A5A00";
+        _driverStatusText->setText(QString("<span style='color:%1; font-weight:600;'>%2 %3</span>")
+            .arg(color)
+            .arg(QString::fromStdString(driverName))
+            .arg(QString::fromStdString(driverVersion)));
+
+        _driverStatus->setToolTip(modern
+            ? QString("MongoDB modern compatibility path active. maxWireVersion: %1").arg(maxWireVersion)
+            : "Legacy MongoDB shell/client 4.2 path active for this server.");
+        _driverStatus->setVisible(true);
     }
 }

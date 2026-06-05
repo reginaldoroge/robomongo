@@ -43,6 +43,22 @@ namespace Robomongo
 
             return QString("%1 (%2)").arg(text).arg(count);
         }
+
+        QString formatStorageSize(double bytes)
+        {
+            const char *units[] = { "B", "KB", "MB", "GB", "TB" };
+            int unit = 0;
+            double value = bytes;
+
+            while (value >= 1024.0 && unit < 4) {
+                value /= 1024.0;
+                ++unit;
+            }
+
+            return unit == 0
+                ? QString("%1 %2").arg(static_cast<qlonglong>(value)).arg(units[unit])
+                : QString("%1 %2").arg(value, 0, 'f', 1).arg(units[unit]);
+        }
     }
     ExplorerDatabaseTreeItem::ExplorerDatabaseTreeItem(QTreeWidgetItem *parent, MongoDatabase *const database) :
         BaseClass(parent),
@@ -93,6 +109,7 @@ namespace Robomongo
         _bus->subscribe(this, MongoDatabaseCollectionsLoadingEvent::Type, _database);
         _bus->subscribe(this, MongoDatabaseFunctionsLoadingEvent::Type, _database);
         _bus->subscribe(this, MongoDatabaseUsersLoadingEvent::Type, _database);
+        _bus->subscribe(this, LoadDatabaseStorageStatsResponse::Type, this);
         
         setText(0, QtUtils::toQString(_database->name()));
         setIcon(0, GuiRegistry::instance().databaseIcon());
@@ -142,22 +159,41 @@ namespace Robomongo
         _database->loadFunctions();
     }
 
+    void ExplorerDatabaseTreeItem::refreshStorageStats()
+    {
+        setText(0, QString("%1 ...").arg(QtUtils::toQString(_database->name())));
+        _pendingStorageStatsRefresh = true;
+
+        if (!_collectionsLoaded) {
+            expandCollections();
+            return;
+        }
+
+        requestStorageStats();
+    }
+
     void ExplorerDatabaseTreeItem::handle(MongoDatabaseCollectionListLoadedEvent *event)
     {
         if (event->isError()) {
             _collectionFolderItem->setText(0, "Collections");
             _collectionFolderItem->setExpanded(false);
+            _pendingStorageStatsRefresh = false;
+            _collectionsLoaded = false;
+            setText(0, QtUtils::toQString(_database->name()));
             return;
         }
 
         std::vector<MongoCollection *> collections = event->collections;
         int count = collections.size();
+        _collectionsLoaded = true;
         _collectionFolderItem->setText(0, detail::buildName("Collections", count));
         QtUtils::clearChildItems(_collectionFolderItem);
 
         // Do not expand, when we do not have collections
         if (count == 0) {
             _collectionFolderItem->setExpanded(false);
+            if (_pendingStorageStatsRefresh)
+                requestStorageStats();
             return;
         }
 
@@ -177,6 +213,9 @@ namespace Robomongo
         }
 
         showCollectionSystemFolderIfNeeded();
+
+        if (_pendingStorageStatsRefresh)
+            requestStorageStats();
     }
 
     void ExplorerDatabaseTreeItem::handle(MongoDatabaseUsersLoadedEvent *event)
@@ -226,6 +265,7 @@ namespace Robomongo
 
     void ExplorerDatabaseTreeItem::handle(MongoDatabaseCollectionsLoadingEvent *event)
     {
+        _collectionsLoaded = false;
         _collectionFolderItem->setText(0, detail::buildName("Collections", -1));
     }
 
@@ -237,6 +277,53 @@ namespace Robomongo
     void ExplorerDatabaseTreeItem::handle(MongoDatabaseUsersLoadingEvent *event)
     {
         _usersFolderItem->setText(0, detail::buildName("Users", -1));
+    }
+
+    void ExplorerDatabaseTreeItem::handle(LoadDatabaseStorageStatsResponse *event)
+    {
+        _pendingStorageStatsRefresh = false;
+
+        if (event->isError()) {
+            setText(0, QtUtils::toQString(_database->name()));
+            QMessageBox::information(
+                NULL,
+                "Error",
+                "Failed to refresh storage sizes.\n\nError:\n" +
+                    QtUtils::toQString(event->error().errorMessage()));
+            return;
+        }
+
+        const MongoDatabaseStorageStats stats = event->stats();
+        setText(0, QString("%1  %2").arg(
+            QtUtils::toQString(_database->name()),
+            detail::formatStorageSize(stats.storageSizeBytes)));
+
+        for (const auto &collectionStats : stats.collections) {
+            for (int i = 0; i < _collectionFolderItem->childCount(); ++i) {
+                auto item = dynamic_cast<ExplorerCollectionTreeItem *>(_collectionFolderItem->child(i));
+                if (item && item->collection()->name() == collectionStats.name) {
+                    item->setStorageSize(collectionStats.storageSizeBytes);
+                    item->refreshIndexesWithSizes(collectionStats.indexSizes);
+                }
+            }
+
+            if (!_collectionSystemFolderItem)
+                continue;
+
+            for (int i = 0; i < _collectionSystemFolderItem->childCount(); ++i) {
+                auto item = dynamic_cast<ExplorerCollectionTreeItem *>(_collectionSystemFolderItem->child(i));
+                if (item && item->collection()->name() == collectionStats.name) {
+                    item->setStorageSize(collectionStats.storageSizeBytes);
+                    item->refreshIndexesWithSizes(collectionStats.indexSizes);
+                }
+            }
+        }
+    }
+
+    void ExplorerDatabaseTreeItem::requestStorageStats()
+    {
+        _bus->send(_database->server()->worker(),
+            new LoadDatabaseStorageStatsRequest(this, _database->name()));
     }
 
     void ExplorerDatabaseTreeItem::addCollectionItem(MongoCollection *collection)

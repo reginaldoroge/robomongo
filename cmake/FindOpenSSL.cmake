@@ -68,25 +68,32 @@ if (OPENSSL_INCLUDE_DIR)
 
     string(REGEX REPLACE "^.*OPENSSL_VERSION_NUMBER[\t ]+0x([0-9a-fA-F])([0-9a-fA-F][0-9a-fA-F])([0-9a-fA-F][0-9a-fA-F])([0-9a-fA-F][0-9a-fA-F])([0-9a-fA-F]).*$"
            "\\1;\\2;\\3;\\4;\\5" OPENSSL_VERSION_LIST "${openssl_version_str}")
-    list(GET OPENSSL_VERSION_LIST 0 OPENSSL_VERSION_MAJOR)
-    list(GET OPENSSL_VERSION_LIST 1 OPENSSL_VERSION_MINOR)
-    from_hex("${OPENSSL_VERSION_MINOR}" OPENSSL_VERSION_MINOR)
-    list(GET OPENSSL_VERSION_LIST 2 OPENSSL_VERSION_FIX)
-    from_hex("${OPENSSL_VERSION_FIX}" OPENSSL_VERSION_FIX)
-    list(GET OPENSSL_VERSION_LIST 3 OPENSSL_VERSION_PATCH)
+    if(OPENSSL_VERSION_LIST MATCHES "^[0-9a-fA-F];")
+      list(GET OPENSSL_VERSION_LIST 0 OPENSSL_VERSION_MAJOR)
+      list(GET OPENSSL_VERSION_LIST 1 OPENSSL_VERSION_MINOR)
+      from_hex("${OPENSSL_VERSION_MINOR}" OPENSSL_VERSION_MINOR)
+      list(GET OPENSSL_VERSION_LIST 2 OPENSSL_VERSION_FIX)
+      from_hex("${OPENSSL_VERSION_FIX}" OPENSSL_VERSION_FIX)
+      list(GET OPENSSL_VERSION_LIST 3 OPENSSL_VERSION_PATCH)
 
-    if (NOT OPENSSL_VERSION_PATCH STREQUAL "00")
-      from_hex("${OPENSSL_VERSION_PATCH}" _tmp)
-      # 96 is the ASCII code of 'a' minus 1
-      math(EXPR OPENSSL_VERSION_PATCH_ASCII "${_tmp} + 96")
-      unset(_tmp)
-      # Once anyone knows how OpenSSL would call the patch versions beyond 'z'
-      # this should be updated to handle that, too. This has not happened yet
-      # so it is simply ignored here for now.
-      string(ASCII "${OPENSSL_VERSION_PATCH_ASCII}" OPENSSL_VERSION_PATCH_STRING)
-    endif ()
+      if (NOT OPENSSL_VERSION_PATCH STREQUAL "00")
+        from_hex("${OPENSSL_VERSION_PATCH}" _tmp)
+        # 96 is the ASCII code of 'a' minus 1
+        math(EXPR OPENSSL_VERSION_PATCH_ASCII "${_tmp} + 96")
+        unset(_tmp)
+        # Once anyone knows how OpenSSL would call the patch versions beyond 'z'
+        # this should be updated to handle that, too. This has not happened yet
+        # so it is simply ignored here for now.
+        string(ASCII "${OPENSSL_VERSION_PATCH_ASCII}" OPENSSL_VERSION_PATCH_STRING)
+      endif ()
 
-    set(OPENSSL_VERSION "${OPENSSL_VERSION_MAJOR}.${OPENSSL_VERSION_MINOR}.${OPENSSL_VERSION_FIX}${OPENSSL_VERSION_PATCH_STRING}")
+      set(OPENSSL_VERSION "${OPENSSL_VERSION_MAJOR}.${OPENSSL_VERSION_MINOR}.${OPENSSL_VERSION_FIX}${OPENSSL_VERSION_PATCH_STRING}")
+    else()
+      file(STRINGS "${OPENSSL_INCLUDE_DIR}/openssl/opensslv.h" openssl_version_str
+           REGEX "^#[\t ]*define[\t ]+OPENSSL_VERSION_STR[\t ]+\"[^\"]+\"")
+      string(REGEX REPLACE "^.*OPENSSL_VERSION_STR[\t ]+\"([^\"]+)\".*$"
+             "\\1" OPENSSL_VERSION "${openssl_version_str}")
+    endif()
   endif ()
 endif ()
 
@@ -116,13 +123,18 @@ else()
   elseif(SYSTEM_LINUX)
     SET(EXT "so")
   endif()
+  if(EXISTS "${OpenSSL_DIR}/lib/libssl.${EXT}")
+    set(OPENSSL_LIBRARY_DIR "${OpenSSL_DIR}/lib")
+  else()
+    set(OPENSSL_LIBRARY_DIR "${OpenSSL_DIR}")
+  endif()
   set_target_properties(ssl PROPERTIES
       INTERFACE_INCLUDE_DIRECTORIES   "${OpenSSL_DIR}/include"
-      IMPORTED_LOCATION               "${OpenSSL_DIR}/libssl.${EXT}"
+      IMPORTED_LOCATION               "${OPENSSL_LIBRARY_DIR}/libssl.${EXT}"
   )
   set_target_properties(crypto PROPERTIES
       INTERFACE_INCLUDE_DIRECTORIES   "${OpenSSL_DIR}/include"
-      IMPORTED_LOCATION               "${OpenSSL_DIR}/libcrypto.${EXT}"
+      IMPORTED_LOCATION               "${OPENSSL_LIBRARY_DIR}/libcrypto.${EXT}"
   )  
 endif()
 

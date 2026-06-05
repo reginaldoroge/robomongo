@@ -57,6 +57,7 @@ namespace Robomongo
         void selectPrevTab();
         void duplicateTab();
         void refreshConnections();
+        void refreshDatabaseSizes();
         void aboutRobomongo();
         void open();
         void save();
@@ -144,6 +145,7 @@ namespace Robomongo
         QAction *_openAction;
         QAction *_saveAction;
         QAction *_saveAsAction;
+        QAction *_refreshDatabaseSizesAction;
         // Execution tool bar
         QAction *_executeAction;
         QAction *_stopAction;

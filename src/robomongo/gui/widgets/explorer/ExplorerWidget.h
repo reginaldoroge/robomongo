@@ -26,6 +26,7 @@ namespace Robomongo
         ~ExplorerWidget();
 
         QTreeWidgetItem* getSelectedTreeItem() const;
+        void refreshStorageStats();
 
     protected Q_SLOTS:
         void handle(ConnectingEvent *event);

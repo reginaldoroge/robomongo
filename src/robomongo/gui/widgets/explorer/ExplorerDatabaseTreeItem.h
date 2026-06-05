@@ -1,5 +1,6 @@
 #pragma once
 
+#include "robomongo/core/domain/MongoStorageStats.h"
 #include "robomongo/gui/widgets/explorer/ExplorerTreeItem.h"
 
 namespace Robomongo
@@ -18,6 +19,7 @@ namespace Robomongo
     class MongoDatabaseCollectionsLoadingEvent;
     class MongoDatabaseFunctionsLoadingEvent;
     class MongoDatabaseUsersLoadingEvent;
+    class LoadDatabaseStorageStatsResponse;
     class MongoDatabase;
     class MongoUser;
     class MongoFunction;
@@ -36,6 +38,7 @@ namespace Robomongo
         void expandCollections();
         void expandUsers();
         void expandFunctions();
+        void refreshStorageStats();
         void expandColection(ExplorerCollectionTreeItem *const item);
         void dropIndexFromCollection(ExplorerCollectionTreeItem *const item, const std::string &indexName);
         void addEditIndex(ExplorerCollectionTreeItem *const item, 
@@ -48,6 +51,7 @@ namespace Robomongo
         void handle(MongoDatabaseCollectionsLoadingEvent *event);
         void handle(MongoDatabaseFunctionsLoadingEvent *event);
         void handle(MongoDatabaseUsersLoadingEvent *event);
+        void handle(LoadDatabaseStorageStatsResponse *event);
 
     private Q_SLOTS:
         void ui_dbStatistics();
@@ -59,6 +63,7 @@ namespace Robomongo
         void ui_refreshDatabase();
 
     private:
+        void requestStorageStats();
         void addCollectionItem(MongoCollection *collection);
         void addSystemCollectionItem(MongoCollection *collection);
         void showCollectionSystemFolderIfNeeded();
@@ -71,6 +76,8 @@ namespace Robomongo
         ExplorerDatabaseCategoryTreeItem *_functionsFolderItem;
         ExplorerDatabaseCategoryTreeItem *_usersFolderItem;
         ExplorerTreeItem *_collectionSystemFolderItem;
+        bool _pendingStorageStatsRefresh = false;
+        bool _collectionsLoaded = false;
         MongoDatabase *const _database;
     };
 }

@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+BIN_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_DIR=$(dirname "$BIN_DIR")
+BUILD_DIR="$PROJECT_DIR/build/arm-driver-probe"
+LEGACY_DRIVER_DIR="$PROJECT_DIR/build/deps/mongo-c-driver-1.19.2-arm64"
+LEGACY_PKG_CONFIG_DIR="$LEGACY_DRIVER_DIR/lib/pkgconfig"
+
+if [[ ! -f "$LEGACY_PKG_CONFIG_DIR/libmongoc-1.0.pc" ]]; then
+  echo "Missing legacy MongoDB driver: $LEGACY_DRIVER_DIR" >&2
+  echo "Build mongo-c-driver 1.19.2 there before running this script." >&2
+  exit 1
+fi
+
+export PKG_CONFIG_PATH="$LEGACY_PKG_CONFIG_DIR:${PKG_CONFIG_PATH:-}"
+
+cmake -S "$PROJECT_DIR" -B "$BUILD_DIR" \
+  -UMONGOC_LEGACY_* \
+  -UBSON_LEGACY_* \
+  -Upkgcfg_lib_MONGOC_LEGACY_* \
+  -Upkgcfg_lib_BSON_LEGACY_* \
+  -DROBO3T_BUILD_ARM_DRIVER_PROBE=ON \
+  -DCMAKE_OSX_ARCHITECTURES=arm64 \
+  -DCMAKE_PREFIX_PATH=/opt/homebrew/opt/qt@5/lib/cmake \
+  -DCMAKE_BUILD_TYPE=Release
+
+cmake --build "$BUILD_DIR" --target robo3t_driver_probe robo3t_arm_preview robo3t_legacy_driver_probe -j8

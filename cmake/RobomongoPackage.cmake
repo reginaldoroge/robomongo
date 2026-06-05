@@ -15,7 +15,7 @@ execute_process(
 string(TIMESTAMP timestamp "%Y-%m-%d")
 
 # Package name (as it should appear in UI)
-set(CPACK_PACKAGE_NAME robo3t)
+set(CPACK_PACKAGE_NAME dino-robomongo)
 
 # Version of the package
 set(CPACK_PACKAGE_VERSION_MAJOR     ${PROJECT_VERSION_MAJOR})
@@ -34,10 +34,10 @@ set(CPACK_MONOLITHIC_INSTALL ON)
 set(CPACK_STRIP_FILES ON)
 
 # Additional information
-set(CPACK_PACKAGE_VENDOR "3T Software Labs Ltd")
-set(CPACK_PACKAGE_CONTACT robo3t@3t.io)
+set(CPACK_PACKAGE_VENDOR "dino-robomongo revival")
+set(CPACK_PACKAGE_CONTACT local@dino-robomongo)
 set(CPACK_PACKAGE_DESCRIPTION "Shell-centric cross-platform MongoDB management tool.")
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Robo 3T is a shell-centric cross-platform MongoDB management tool.")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "dino-robomongo is a revived shell-centric MongoDB management tool.")
 
 # Use lowercase for system name and package file name
 string(TOLOWER ${CMAKE_SYSTEM_NAME} system_name)
@@ -62,7 +62,7 @@ elseif(SYSTEM_MACOSX)
 
 elseif(SYSTEM_WINDOWS)
     set(files_dir "${CMAKE_SOURCE_DIR}/install/windows")
-    set(exe_name "robo3t.exe")
+    set(exe_name "dino-robomongo.exe")
 
     set(CPACK_GENERATOR NSIS ZIP)
     set(CPACK_PACKAGE_DESCRIPTION_FILE "${CMAKE_SOURCE_DIR}/DESCRIPTION")

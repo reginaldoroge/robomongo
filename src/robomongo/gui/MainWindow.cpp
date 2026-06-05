@@ -128,6 +128,7 @@ namespace Robomongo
         _logDock(nullptr), _workArea(nullptr), _explorer(nullptr), _app(AppRegistry::instance().app()), 
         _connectionsMenu(nullptr), _connectButton(nullptr), _viewMenu(nullptr), _toolbarsMenu(nullptr), 
         _connectAction(nullptr), _openAction(nullptr), _saveAction(nullptr), _saveAsAction(nullptr),
+        _refreshDatabaseSizesAction(nullptr),
         _executeAction(nullptr), _stopAction(nullptr), _orientationAction(nullptr), _execToolBar(nullptr),
 #if defined(Q_OS_WIN)
         _trayIcon(nullptr),
@@ -166,6 +167,12 @@ namespace Robomongo
         _saveAsAction = new QAction(tr("Save &As..."), this);
         _saveAsAction->setShortcuts(QKeySequence::SaveAs);
         VERIFY(connect(_saveAsAction, SIGNAL(triggered()), this, SLOT(saveAs())));
+
+        _refreshDatabaseSizesAction = new QAction(
+            QIcon(":/robomongo/icons/database_16x16.png"),
+            tr("Sizes"), this);
+        _refreshDatabaseSizesAction->setToolTip(tr("Refresh database and collection sizes"));
+        VERIFY(connect(_refreshDatabaseSizesAction, SIGNAL(triggered()), this, SLOT(refreshDatabaseSizes())));
 
         // Exit action
         QAction *exitAction = new QAction("&Exit", this);
@@ -520,21 +527,11 @@ namespace Robomongo
         windowMenu->addAction(duplicateAction);
         windowMenu->addSeparator();
 
-        auto const& settings { AppRegistry::instance().settingsManager() };
-        if (!settings->disableHttpsFeatures()) {
-            // Open welcome tab action
-            auto openWelcomeTabAction = new QAction("Open/Refresh Welcome Tab", this);
-            openWelcomeTabAction->setShortcut(Qt::CTRL + Qt::SHIFT + Qt::Key_W);
-            openWelcomeTabAction->setVisible(true);
-            VERIFY(connect(openWelcomeTabAction, SIGNAL(triggered()), SLOT(openWelcomeTab())));
-            windowMenu->addAction(openWelcomeTabAction);
-        }        
-
         auto toolbarsSettings = AppRegistry::instance().settingsManager()->toolbars();
 
     /*** About menu ***/
 
-        QAction *aboutRobomongoAction = new QAction("&About Robo 3T...", this);
+        QAction *aboutRobomongoAction = new QAction("&About dino-robomongo...", this);
         VERIFY(connect(aboutRobomongoAction, SIGNAL(triggered()), this, SLOT(aboutRobomongo())));
 
         // Options menu
@@ -574,6 +571,15 @@ namespace Robomongo
         setToolBarIconSize(_execToolBar);
         addToolBar(_execToolBar);
 
+        QToolBar *databaseToolBar = new QToolBar(tr("Database Tools Toolbar"), this);
+        databaseToolBar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+        databaseToolBar->addAction(_refreshDatabaseSizesAction);
+        databaseToolBar->setMovable(false);
+        databaseToolBar->setVisible(true);
+        _toolbarsMenu->addAction(databaseToolBar->toggleViewAction());
+        setToolBarIconSize(databaseToolBar);
+        addToolBar(databaseToolBar);
+
         _updateLabel = new QLabel;
         _updateLabel->setWordWrap(true);
         _updateLabel->setOpenExternalLinks(true);
@@ -611,7 +617,7 @@ namespace Robomongo
 
         createTabs();
         createStatusBar();
-        setWindowTitle("Robo 3T - " + QString(PROJECT_VERSION_SHORT));
+        setWindowTitle("dino-robomongo - " + QString(PROJECT_VERSION));
         setWindowIcon(GuiRegistry::instance().mainWindowIcon());
 
         QTimer::singleShot(0, this, SLOT(manageConnections()));       
@@ -632,16 +638,6 @@ namespace Robomongo
         _networkAccessManager = new QNetworkAccessManager;
         VERIFY(connect(_networkAccessManager, SIGNAL(finished(QNetworkReply*)),
                this, SLOT(on_networkReply(QNetworkReply*))));
-
-        if (!settings->disableHttpsFeatures() && settings->checkForUpdates()) {
-            // First check for updates THIRTY_SECONDS after program start            
-            QTimer::singleShot(THIRTY_SECONDS, this, SLOT(checkUpdates()));
-
-            // Then, check for updates every 1 hour
-            auto const timer { new QTimer(this) };
-            VERIFY(connect(timer, SIGNAL(timeout()), this, SLOT(checkUpdates())));
-            timer->start(ONE_HOUR);
-        }
 
         setUnifiedTitleAndToolBarOnMac(false); // https://bugreports.qt.io/browse/QTBUG-68946
     }
@@ -1022,6 +1018,12 @@ namespace Robomongo
         QString("Refresh not working yet... : <br/>  <b>Ctrl+D</b> : push Button"));
     }
 
+    void MainWindow::refreshDatabaseSizes()
+    {
+        if (_explorer)
+            _explorer->refreshStorageStats();
+    }
+
     void MainWindow::aboutRobomongo()
     {
         AboutDialog dlg(this);
@@ -1200,7 +1202,7 @@ namespace Robomongo
     {
 #if defined(Q_OS_WIN)
         if (_trayIcon->contextMenu()->actions().size() > 0 && isHidden()) {
-            _trayIcon->contextMenu()->actions().at(0)->setText("Show Robo 3T");
+            _trayIcon->contextMenu()->actions().at(0)->setText("Show dino-robomongo");
         }
 #endif
     }

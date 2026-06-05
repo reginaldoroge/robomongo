@@ -26,6 +26,7 @@ namespace Robomongo
         ** Expand server tree item;
         */
         void expand();
+        void refreshStorageStats();
 
         // Disable/enable menu items, except [1]:Refresh and [9]:Disconnect which are 
         // always enabled, according to replica set status (online or offline).

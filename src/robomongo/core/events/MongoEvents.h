@@ -10,6 +10,7 @@
 #include "robomongo/core/domain/CursorPosition.h"
 #include "robomongo/core/domain/MongoUser.h"
 #include "robomongo/core/domain/MongoFunction.h"
+#include "robomongo/core/domain/MongoStorageStats.h"
 #include "robomongo/core/events/MongoEventsInfo.h"
 #include "robomongo/core/domain/MongoAggregateInfo.h"
 #include "robomongo/core/Event.h"
@@ -233,6 +234,37 @@ namespace Robomongo
         std::vector<IndexInfo> indexes() const { return _indexes; }
     private:
         std::vector<IndexInfo> _indexes;
+    };
+
+    class LoadDatabaseStorageStatsRequest : public Event
+    {
+        R_EVENT
+    public:
+        LoadDatabaseStorageStatsRequest(QObject *sender, const std::string &databaseName) :
+            Event(sender),
+            _databaseName(databaseName) {}
+
+        std::string databaseName() const { return _databaseName; }
+
+    private:
+        std::string _databaseName;
+    };
+
+    class LoadDatabaseStorageStatsResponse : public Event
+    {
+        R_EVENT
+    public:
+        LoadDatabaseStorageStatsResponse(QObject *sender, const MongoDatabaseStorageStats &stats) :
+            Event(sender),
+            _stats(stats) {}
+
+        LoadDatabaseStorageStatsResponse(QObject *sender, const EventError &error) :
+            Event(sender, error) {}
+
+        MongoDatabaseStorageStats stats() const { return _stats; }
+
+    private:
+        MongoDatabaseStorageStats _stats;
     };
 
     class AddEditIndexRequest : public Event
@@ -923,6 +955,50 @@ namespace Robomongo
         std::vector<MongoDocumentPtr> documents;
     };
 
+    class ExportQueryRequest : public Event
+    {
+        R_EVENT
+
+    public:
+        ExportQueryRequest(QObject *sender, int requestId, const MongoQueryInfo &queryInfo) :
+            Event(sender),
+            _requestId(requestId),
+            _queryInfo(queryInfo) {}
+
+        int requestId() const { return _requestId; }
+        MongoQueryInfo queryInfo() const { return _queryInfo; }
+
+    private:
+        int _requestId;
+        MongoQueryInfo _queryInfo;
+    };
+
+    class ExportQueryResponse : public Event
+    {
+        R_EVENT
+
+    public:
+        ExportQueryResponse(QObject *sender, int requestId, const MongoQueryInfo &queryInfo,
+                            const std::vector<MongoDocumentPtr> &documents) :
+            Event(sender),
+            _requestId(requestId),
+            _queryInfo(queryInfo),
+            _documents(documents) {}
+
+        ExportQueryResponse(QObject *sender, int requestId, const EventError &error) :
+            Event(sender, error),
+            _requestId(requestId) {}
+
+        int requestId() const { return _requestId; }
+        MongoQueryInfo queryInfo() const { return _queryInfo; }
+        std::vector<MongoDocumentPtr> documents() const { return _documents; }
+
+    private:
+        int _requestId;
+        MongoQueryInfo _queryInfo;
+        std::vector<MongoDocumentPtr> _documents;
+    };
+
     class AutocompleteRequest : public Event
     {
         R_EVENT
@@ -1097,6 +1173,29 @@ namespace Robomongo
         MongoQueryInfo _queryInfo;
         std::vector<MongoDocumentPtr> _documents;
         std::string _query;
+    };
+
+    class QueryResultExportLoadedEvent : public Event
+    {
+        R_EVENT
+
+    public:
+        QueryResultExportLoadedEvent(QObject *sender, int requestId,
+                                     const std::vector<MongoDocumentPtr> &docs) :
+            Event(sender),
+            _requestId(requestId),
+            _documents(docs) {}
+
+        QueryResultExportLoadedEvent(QObject *sender, int requestId, const EventError &error) :
+            Event(sender, error),
+            _requestId(requestId) {}
+
+        int requestId() const { return _requestId; }
+        std::vector<MongoDocumentPtr> documents() const { return _documents; }
+
+    private:
+        int _requestId;
+        std::vector<MongoDocumentPtr> _documents;
     };
 
     class ScriptExecutedEvent : public Event

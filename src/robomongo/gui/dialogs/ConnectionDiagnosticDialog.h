@@ -21,6 +21,10 @@ namespace Robomongo
         ~ConnectionDiagnosticDialog();
 
         bool continueExec() const { return _continueExec; }
+        bool isSuccessful() const { return _successful; }
+        std::string driverName() const { return _driverName; }
+        std::string driverVersion() const { return _driverVersion; }
+        int maxWireVersion() const { return _maxWireVersion; }
 
     protected Q_SLOTS:
         void handle(ConnectionEstablishedEvent *event);
@@ -67,5 +71,9 @@ namespace Robomongo
         MongoServer *_server;
         int _serverHandle;
         bool _continueExec;
+        bool _successful = false;
+        std::string _driverName = "Legacy driver";
+        std::string _driverVersion = "4.2";
+        int _maxWireVersion = 0;
     };
 }
