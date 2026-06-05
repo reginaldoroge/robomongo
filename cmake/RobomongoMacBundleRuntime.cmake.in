@@ -1,6 +1,7 @@
 set(APP_ROOT "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/@bundle_name@")
 set(APP_BIN "${APP_ROOT}/Contents/MacOS/dino-robomongo")
 set(RUNTIME_LIB_DIR "${APP_ROOT}/Contents/Frameworks")
+set(PLUGIN_DIR "${APP_ROOT}/Contents/PlugIns")
 set(FRAMEWORKS_REF "@executable_path/../Frameworks")
 
 function(require_path path description)
@@ -79,6 +80,8 @@ endfunction()
 
 require_path("@MACDEPLOYQT_EXECUTABLE@" "macdeployqt")
 require_path("${APP_BIN}" "application binary")
+
+file(REMOVE_RECURSE "${RUNTIME_LIB_DIR}" "${PLUGIN_DIR}")
 run_tool("${CMAKE_COMMAND}" -E make_directory "${RUNTIME_LIB_DIR}")
 
 run_tool("@MACDEPLOYQT_EXECUTABLE@" "${APP_ROOT}" -always-overwrite)
