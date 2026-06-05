@@ -4,6 +4,10 @@ project(DinoRobomongo)
 # Where to look first for CMake modules, before "${CMAKE_ROOT}/Modules" is checked
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
+if(WIN32 AND NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+    message(FATAL_ERROR "dino-robomongo Windows builds target x64 only. Use a 64-bit Visual Studio generator/toolchain.")
+endif()
+
 option(ROBO3T_BUILD_ARM_DRIVER_PROBE "Build only the native ARM MongoDB driver probe." OFF)
 
 # Project version

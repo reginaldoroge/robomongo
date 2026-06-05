@@ -1,6 +1,37 @@
 Building Robo 3T (Windows)
 ==============================
 
+Current dino-robomongo Windows status
+-------------
+
+This document is being kept as the Windows bring-up guide for the revived
+`dino-robomongo` codebase. The current verified build target is macOS ARM64;
+Windows is expected to be brought up as **Windows x64**, not 32-bit Windows.
+
+The repo should stay as one cross-platform codebase:
+
+- Use short-lived Windows bring-up branches only while fixing compilation.
+- Merge the fixes back to the main branch after they are guarded.
+- Prefer CMake `if(WIN32)` for build and dependency differences.
+- Use `#ifdef _WIN32` only for Windows-specific C++ code.
+- Remember that `_WIN32` is also defined on 64-bit Windows.
+- Use `_WIN64` only when code depends on a 64-bit Windows ABI detail.
+
+The top-level CMake configuration fails early when a Windows 32-bit generator is
+used. Build with a 64-bit Visual Studio generator/toolchain, for example:
+
+```bat
+cmake -S . -B build\windows-x64 ^
+  -G "Visual Studio 17 2022" ^
+  -A x64 ^
+  -DCMAKE_BUILD_TYPE=Release
+
+cmake --build build\windows-x64 --config Release --target robomongo
+```
+
+The refreshed dashboard no longer uses Qt WebEngine, so Windows packaging does
+not need WebEngine DLLs or `QtWebEngineProcess.exe` for the startup tab.
+
 A. Prerequisites
 -------------
 

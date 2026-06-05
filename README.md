@@ -98,6 +98,22 @@ The project has been built and launched successfully on Apple Silicon.
 
 Windows x64 and Linux builds are still planned targets. The codebase keeps cross-platform support in mind, but each platform needs its own dependency build and packaging work.
 
+Qt WebEngine was removed from the revived welcome/dashboard path. That makes Windows packaging simpler because the app no longer needs Chromium helper processes or WebEngine runtime DLLs just to render the startup tab.
+
+## Cross-Platform Build Strategy
+
+The project should stay on one main codebase. Windows work should happen in short-lived bring-up branches, then merge back after the platform-specific fixes are guarded.
+
+Use these rules when adding platform code:
+
+- Prefer CMake platform checks for build wiring: `if(WIN32)`, `if(APPLE)`, `if(UNIX AND NOT APPLE)`.
+- Use `#ifdef _WIN32` only around code that truly has to call Windows APIs or use Windows paths.
+- `_WIN32` is defined for both 32-bit and 64-bit Windows. This project targets Windows x64 only.
+- Use `_WIN64` only when the code relies on a 64-bit Windows ABI detail.
+- Keep shared logic outside platform guards and isolate OS-specific code in small functions/files.
+
+The top-level CMake file now fails early for 32-bit Windows generators. A Windows build should use a 64-bit Visual Studio generator/toolchain.
+
 ## Build Outline
 
 The build has two main parts:
@@ -114,6 +130,19 @@ cmake -S . -B build/main-arm-v42 \
 
 cmake --build build/main-arm-v42 --target robomongo -j8
 ```
+
+Expected Windows x64 shape:
+
+```bat
+cmake -S . -B build\windows-x64 ^
+  -G "Visual Studio 17 2022" ^
+  -A x64 ^
+  -DCMAKE_BUILD_TYPE=Release
+
+cmake --build build\windows-x64 --config Release --target robomongo
+```
+
+The Windows build still needs its local dependency set wired first: Qt 5 for MSVC x64, OpenSSL, the legacy Robo Mongo shell/client 4.2 objects, and the modern MongoDB C/C++ driver libraries.
 
 Unit tests can be built and run with:
 
