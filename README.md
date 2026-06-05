@@ -1,75 +1,111 @@
 # dino-robomongo 2.0.0
 
-dino-robomongo is an effort to bring Robo 3T back as a fast, native, cross-platform MongoDB desktop client.
+dino-robomongo is a revival of Robo 3T focused on keeping the original app fast, native, and shell-centric while making it useful again with both legacy and modern MongoDB servers.
 
-The original Robo 3T was valuable because it was small, direct, and shell-centric. This fork keeps that spirit, removes stale promotional surfaces, and starts modernizing the build so the app can run on current machines again.
+The main goal of this fork is compatibility without turning the app into a heavy database platform. Older MongoDB installations still matter, but modern MongoDB 7/8 servers require a newer driver path. This project now carries both ideas forward.
 
-## Why This Exists
+## What Changed
 
-Robo 3T still solves a real problem: many teams need a lightweight MongoDB UI that opens quickly, exposes the database clearly, and does not force a heavy commercial workflow.
+- Rebranded the app as **dino-robomongo 2.0.0**.
+- Replaced the old promotional welcome screen with a project revival screen.
+- Added a native macOS ARM64 build path.
+- Rebuilt the embedded Robo Mongo shell/client 4.2 for current macOS ARM machines.
+- Added a modern `mongocxx` driver path for compatibility probing and modern-server operations.
+- Kept the legacy MongoDB 4.2 client path for older deployments.
+- Added driver family/version feedback in the connection test UI.
+- Added database, collection, and index size refresh in the explorer.
+- Added result export from query output to JSON, JSON Lines, and CSV.
+- Added export scope controls, including visible results, a custom export limit, and all query results.
+- Added a new splash screen and refreshed app icons.
 
-The gap is compatibility. The original app embeds the MongoDB 4.2 shell/client. That is useful for older servers such as MongoDB 3.6, but it is not a complete answer for modern MongoDB 7 and 8.
+## Dual Driver Compatibility
 
-This revival keeps the legacy path alive while preparing the project for a second, modern driver path.
+dino-robomongo is designed to support two MongoDB generations:
 
-## Current Status
-
-Working now:
-
-- Native macOS ARM64 build.
-- Qt 5 UI running on Apple Silicon.
-- Embedded MongoDB shell/client 4.2 compiled for ARM64.
-- Legacy MongoDB connections, including older MongoDB 3.6 targets.
-- Basic MongoDB 8 connectivity for currently tested flows.
-- Driver status indicator in the connection test UI.
-- Modern `mongocxx` compatibility probe wired into the main app.
-- The old welcome/promotional tab was replaced by the dino-robomongo screen.
-
-Known limitations:
-
-- MongoDB 8 support is not complete yet.
-- The current runtime still uses the legacy MongoDB 4.2 client.
-- Some MongoDB 8 operations can still hit removed legacy commands or old protocol assumptions.
-- Windows and Linux builds need their own dependency builds.
-
-## Driver Strategy
-
-The project is moving toward two MongoDB backends:
-
-| Backend | Purpose | Status |
+| Driver path | Target servers | Purpose |
 | --- | --- | --- |
-| Legacy driver | Keep MongoDB 3.6 and older deployments usable | Active |
-| Modern driver | Proper MongoDB 7/8 support | Compatibility probe active |
+| Legacy MongoDB 4.2 client | MongoDB 3.6 and legacy deployments | Preserve compatibility with old databases and shell behavior |
+| Modern `mongocxx` driver | MongoDB 7/8 and newer deployments | Avoid removed legacy commands and support current server behavior |
 
-The app should choose the backend by server capability instead of forcing one driver to handle every MongoDB generation.
+This matters because a modern MongoDB server may still accept a basic connection from the old client, but that does not make the old driver fully compatible. Newer MongoDB versions removed commands such as `getLastError`, changed expectations around server discovery, and require modern handling for several operations.
 
-That matters because MongoDB 8 can accept basic connections from the old client, but compatibility is not the same as correctness. Commands like `getLastError` no longer exist on modern servers, and auth, TLS, URI handling, write concern, and newer server features need a current driver.
+The app now exposes driver information instead of hiding this detail. When testing a connection, the UI shows whether the active path is legacy or modern and reports the driver family/version.
+
+## MongoDB Compatibility Goals
+
+Current practical targets:
+
+- MongoDB 3.6 through the legacy path.
+- MongoDB 4.x through the existing embedded shell/client.
+- MongoDB 7/8 through the modern-driver modernization work.
+
+The long-term rule is simple: keep old MongoDB support working, but do not force the legacy driver to pretend it can correctly handle modern servers.
+
+## New Features
+
+### Driver Status in Connection Test
+
+Connection testing now reports which driver family is active. This is important while the project supports both old and new MongoDB server generations.
+
+### Explorer Sizes
+
+The toolbar includes a **Sizes** action that refreshes storage sizes in the left explorer tree.
+
+It can show:
+
+- database size
+- collection size
+- index size
+
+Sizes are refreshed only when requested, so large databases are not scanned constantly while browsing.
+
+### Result Export
+
+Query results can be exported directly from the result header.
+
+Supported formats:
+
+- JSON
+- JSON Lines
+- CSV
+
+Supported scopes:
+
+- visible results only
+- query results with a custom export limit
+- all results from the query
+
+The export path is separated from the visible result page, so exporting a larger set does not change the currently displayed page.
+
+### Revival UI
+
+The previous promotional startup tab was removed. The new first screen explains the dino-robomongo revival and the driver compatibility direction.
+
+### Splash and Icons
+
+The app now uses dino-robomongo branding for the splash screen and application icons.
 
 ## Build Status
 
-The verified development target is currently macOS ARM64.
+The verified development target is currently:
 
-The main app has been built as an ARM64 binary and launched successfully. The embedded MongoDB shell/client was rebuilt from the Robo 3T Mongo shell fork with ARM64 fixes for macOS.
+- macOS ARM64
+- Qt 5
+- embedded MongoDB shell/client 4.2
+- modern `mongocxx`/`bsoncxx` libraries available locally
 
-Linux x64 should be the next most practical target. Windows x64 is possible, but it requires a separate MSVC/Qt/dependency build. Linux ARM64 is possible but will likely need architecture-specific dependency work similar to macOS ARM64.
+The project has been built and launched successfully on Apple Silicon.
+
+Windows x64 and Linux builds are still planned targets. The codebase keeps cross-platform support in mind, but each platform needs its own dependency build and packaging work.
 
 ## Build Outline
 
-The build has two major stages:
+The build has two main parts:
 
-1. Build the embedded Robo Mongo shell.
-2. Build the Robo 3T Qt application against that shell and the local dependencies.
+1. Build or provide the embedded Robo Mongo shell/client 4.2.
+2. Build the Qt desktop application against the shell, Qt, OpenSSL, and MongoDB C/C++ driver dependencies.
 
-For macOS ARM64, the current build expects:
-
-- Xcode command line tools.
-- CMake.
-- Python 3.
-- Qt 5.
-- OpenSSL.
-- A compiled Robo Mongo shell 4.2 tree.
-
-Example app build shape:
+Example macOS ARM64 shape:
 
 ```sh
 cmake -S . -B build/main-arm-v42 \
@@ -79,11 +115,16 @@ cmake -S . -B build/main-arm-v42 \
 cmake --build build/main-arm-v42 --target robomongo -j8
 ```
 
-The exact dependency paths depend on the local machine, so keep build configuration explicit rather than relying on global state.
+Unit tests can be built and run with:
+
+```sh
+cmake --build build/main-arm-v42 --target robo_unit_tests -j8
+build/main-arm-v42/src/robomongo-unit-tests/robo_unit_tests
+```
 
 ## Testing MongoDB 8 Locally
 
-A temporary MongoDB 8 server can be run with Docker:
+A temporary MongoDB 8 server can be started with Docker:
 
 ```sh
 docker run --rm -d \
@@ -92,53 +133,40 @@ docker run --rm -d \
   public.ecr.aws/docker/library/mongo:8
 ```
 
-Use this URI in dino-robomongo:
+Then connect using:
 
 ```text
 mongodb://localhost:27018
 ```
 
-The connection settings test now shows which driver family is being used. Today that is:
-
-```text
-Legacy driver 4.2
-```
-
-## Product Direction
-
-The goal is not to turn dino-robomongo into a large database platform. The goal is to revive the compact native client:
-
-- Fast startup.
-- Clear database explorer.
-- Direct shell workflow.
-- Modern server compatibility.
-- No promotional startup screen.
-- Cross-platform builds.
-- Small, maintainable feature modules.
-
-The modernization should stay pragmatic. Keep the old backend where it is still valuable, add a modern backend where it is required, and avoid rewriting unrelated UI until it blocks compatibility or maintainability.
-
 ## Roadmap
 
 Near term:
 
-- Stabilize the macOS ARM64 build.
+- Expand modern-driver coverage for find, insert, update, remove, and database commands.
+- Keep replacing legacy checks that depend on removed MongoDB commands.
 - Add more MongoDB 8 smoke tests.
-- Replace more legacy write checks that depend on removed commands.
-- Keep the connection UI honest about driver family and version.
+- Keep driver selection and driver status visible to users.
 
 Next:
 
-- Introduce a modern MongoDB driver backend.
-- Route connections by server version or wire protocol capability.
 - Package macOS ARM64 builds.
 - Bring up Linux x64.
+- Add Windows x64 CI/build packaging.
 
 Later:
 
-- Bring up Windows x64.
-- Evaluate Linux ARM64.
-- Remove old network/promotional code that no longer belongs in the app.
+- Improve automatic routing between legacy and modern driver paths.
+- Reduce old code paths that only exist for removed promotional or update flows.
+- Keep the UI small, direct, and suitable for repeated operational work.
+
+## Design Principles
+
+- Keep the app native and fast.
+- Preserve the direct shell workflow.
+- Support old MongoDB deployments without blocking modern compatibility.
+- Prefer explicit driver behavior over hidden fallback logic.
+- Add focused features without turning the app into a large platform.
 
 ## License
 
