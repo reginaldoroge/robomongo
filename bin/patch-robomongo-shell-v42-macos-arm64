@@ -1,0 +1,223 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+shell_dir="${1:-build/deps/robomongo-shell-v4.2}"
+
+if [[ ! -d "${shell_dir}/src/third_party/mozjs-60" ]]; then
+    echo "robomongo-shell v4.2 source not found: ${shell_dir}" >&2
+    exit 1
+fi
+
+cd "${shell_dir}"
+
+python3 - <<'PY'
+from pathlib import Path
+
+
+def replace_once(path, old, new):
+    source = Path(path)
+    text = source.read_text()
+    if new in text:
+        return
+    if old not in text:
+        raise SystemExit(f"Pattern not found in {path}")
+    source.write_text(text.replace(old, new, 1))
+
+
+replace_once(
+    "src/third_party/mozjs-60/extract/js/src/threading/ExclusiveData.h",
+    "      : lock_(mozilla::Move(rhs.lock))",
+    "      : lock_(mozilla::Move(rhs.lock_))",
+)
+
+replace_once(
+    "src/third_party/zlib-1.2.11/zutil.h",
+    "#if defined(MACOS) || defined(TARGET_OS_MAC)",
+    "#if (defined(MACOS) || defined(TARGET_OS_MAC)) && !defined(__APPLE__)",
+)
+
+wasm = "src/third_party/mozjs-60/extract/js/src/wasm/WasmSignalHandlers.cpp"
+
+replace_once(
+    wasm,
+    """# define R14_sig(p) ((p)->uc_mcontext->__ss.__lr)
+# define R15_sig(p) ((p)->uc_mcontext->__ss.__pc)
+#else
+""",
+    """# define R14_sig(p) ((p)->uc_mcontext->__ss.__lr)
+# define R15_sig(p) ((p)->uc_mcontext->__ss.__pc)
+# if defined(__aarch64__)
+#  if __DARWIN_OPAQUE_ARM_THREAD_STATE64
+#   define EPC_sig(p) ((p)->uc_mcontext->__ss.__opaque_pc)
+#   define RFP_sig(p) ((p)->uc_mcontext->__ss.__opaque_fp)
+#   define RLR_sig(p) ((p)->uc_mcontext->__ss.__opaque_lr)
+#   define R31_sig(p) ((p)->uc_mcontext->__ss.__opaque_sp)
+#  else
+#   define EPC_sig(p) ((p)->uc_mcontext->__ss.__pc)
+#   define RFP_sig(p) ((p)->uc_mcontext->__ss.__fp)
+#   define RLR_sig(p) ((p)->uc_mcontext->__ss.__lr)
+#   define R31_sig(p) ((p)->uc_mcontext->__ss.__sp)
+#  endif
+# endif
+#else
+""",
+)
+
+replace_once(
+    wasm,
+    """struct macos_arm_context {
+    arm_thread_state_t thread;
+    arm_neon_state_t float_;
+};
+#  define EMULATOR_CONTEXT macos_arm_context
+# else
+""",
+    """struct macos_arm_context {
+    arm_thread_state_t thread;
+    arm_neon_state_t float_;
+};
+#  define EMULATOR_CONTEXT macos_arm_context
+# elif defined(__aarch64__)
+struct macos_arm64_context {
+    arm_thread_state64_t thread;
+    arm_neon_state64_t float_;
+};
+#  define EMULATOR_CONTEXT macos_arm64_context
+# else
+""",
+)
+
+replace_once(
+    wasm,
+    """# elif defined(__arm__)
+    static_assert(sizeof(context->thread.__pc) == sizeof(void*),
+                  "stored IP should be compile-time pointer-sized");
+    return reinterpret_cast<uint8_t**>(&context->thread.__pc);
+# else
+""",
+    """# elif defined(__arm__)
+    static_assert(sizeof(context->thread.__pc) == sizeof(void*),
+                  "stored IP should be compile-time pointer-sized");
+    return reinterpret_cast<uint8_t**>(&context->thread.__pc);
+# elif defined(__aarch64__)
+#  if __DARWIN_OPAQUE_ARM_THREAD_STATE64
+    static_assert(sizeof(context->thread.__opaque_pc) == sizeof(void*),
+                  "stored IP should be compile-time pointer-sized");
+    return reinterpret_cast<uint8_t**>(&context->thread.__opaque_pc);
+#  else
+    static_assert(sizeof(context->thread.__pc) == sizeof(void*),
+                  "stored IP should be compile-time pointer-sized");
+    return reinterpret_cast<uint8_t**>(&context->thread.__pc);
+#  endif
+# else
+""",
+)
+
+replace_once(
+    wasm,
+    """# elif defined(__arm__)
+    return (uint8_t*)context->thread.__r[11];
+# else
+""",
+    """# elif defined(__arm__)
+    return (uint8_t*)context->thread.__r[11];
+# elif defined(__aarch64__)
+#  if __DARWIN_OPAQUE_ARM_THREAD_STATE64
+    return (uint8_t*)context->thread.__opaque_fp;
+#  else
+    return (uint8_t*)context->thread.__fp;
+#  endif
+# else
+""",
+)
+
+replace_once(
+    wasm,
+    """# if defined(__arm__) || defined(__aarch64__)
+static uint8_t*
+ContextToLR(EMULATOR_CONTEXT* context)
+{
+    return (uint8_t*)context->thread.__lr;
+}
+# endif
+""",
+    """# if defined(__arm__)
+static uint8_t*
+ContextToLR(EMULATOR_CONTEXT* context)
+{
+    return (uint8_t*)context->thread.__lr;
+}
+# elif defined(__aarch64__)
+static uint8_t*
+ContextToLR(EMULATOR_CONTEXT* context)
+{
+#  if __DARWIN_OPAQUE_ARM_THREAD_STATE64
+    return (uint8_t*)context->thread.__opaque_lr;
+#  else
+    return (uint8_t*)context->thread.__lr;
+#  endif
+}
+# endif
+""",
+)
+
+replace_once(
+    wasm,
+    """# elif defined(__arm__)
+    return (uint8_t*)context->thread.__sp;
+# else
+""",
+    """# elif defined(__arm__)
+    return (uint8_t*)context->thread.__sp;
+# elif defined(__aarch64__)
+#  if __DARWIN_OPAQUE_ARM_THREAD_STATE64
+    return (uint8_t*)context->thread.__opaque_sp;
+#  else
+    return (uint8_t*)context->thread.__sp;
+#  endif
+# else
+""",
+)
+
+replace_once(
+    wasm,
+    """# elif defined(__arm__)
+    unsigned int thread_state_count = ARM_THREAD_STATE_COUNT;
+    unsigned int float_state_count = ARM_NEON_STATE_COUNT;
+    int thread_state = ARM_THREAD_STATE;
+    int float_state = ARM_NEON_STATE;
+# else
+""",
+    """# elif defined(__arm__)
+    unsigned int thread_state_count = ARM_THREAD_STATE_COUNT;
+    unsigned int float_state_count = ARM_NEON_STATE_COUNT;
+    int thread_state = ARM_THREAD_STATE;
+    int float_state = ARM_NEON_STATE;
+# elif defined(__aarch64__)
+    unsigned int thread_state_count = ARM_THREAD_STATE64_COUNT;
+    unsigned int float_state_count = ARM_NEON_STATE64_COUNT;
+    int thread_state = ARM_THREAD_STATE64;
+    int float_state = ARM_NEON_STATE64;
+# else
+""",
+)
+PY
+
+platform_root="src/third_party/mozjs-60/platform"
+macos_arm64="${platform_root}/aarch64/macOS"
+
+rm -rf "${macos_arm64}"
+mkdir -p "${macos_arm64}"
+cp -R "${platform_root}/x86_64/macOS/build" "${macos_arm64}/build"
+cp -R "${platform_root}/aarch64/linux/include" "${macos_arm64}/include"
+
+python3 - <<'PY'
+from pathlib import Path
+
+path = Path("src/third_party/mozjs-60/platform/aarch64/macOS/build/js-confdefs.h")
+text = path.read_text()
+text = text.replace("#define JS_CODEGEN_X64 1", "#define JS_CODEGEN_ARM64 1")
+path.write_text(text)
+PY
+
+echo "robomongo-shell v4.2 macOS ARM64 patch applied at ${PWD}"
