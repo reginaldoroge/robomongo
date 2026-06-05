@@ -74,6 +74,7 @@ set(ESPRIMA_DIR src/third-party/esprima-${ESPRIMA_VERSION})
 # todo: Use equivalent vars from googletest cmake files. Currently they are somehow not working.
 set(GOOGLE_TEST_VERSION 1.8.1)
 set(GOOGLE_TEST_DIR src/third-party/googletest-${GOOGLE_TEST_VERSION})
+set(INSTALL_GTEST OFF CACHE BOOL "Do not install vendored GoogleTest artifacts" FORCE)
 add_subdirectory(${LIBSSH2_DIR})
 add_subdirectory(src/robomongo/ssh)
 add_subdirectory(${QJSON_DIR})

@@ -1,0 +1,150 @@
+set(APP_ROOT "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/@bundle_name@")
+set(APP_BIN "${APP_ROOT}/Contents/MacOS/dino-robomongo")
+set(RUNTIME_LIB_DIR "${APP_ROOT}/Contents/Frameworks")
+set(FRAMEWORKS_REF "@executable_path/../Frameworks")
+
+function(require_path path description)
+    if(NOT EXISTS "${path}")
+        message(FATAL_ERROR "Missing ${description}: ${path}")
+    endif()
+endfunction()
+
+function(run_tool)
+    execute_process(
+        COMMAND ${ARGN}
+        RESULT_VARIABLE result
+        ERROR_VARIABLE error_output)
+    if(NOT result EQUAL 0)
+        string(REPLACE ";" " " printable_command "${ARGN}")
+        message(FATAL_ERROR "Command failed (${result}): ${printable_command}\n${error_output}")
+    endif()
+endfunction()
+
+function(add_runtime_rpath target rpath)
+    execute_process(
+        COMMAND install_name_tool -add_rpath "${rpath}" "${target}"
+        RESULT_VARIABLE result
+        ERROR_VARIABLE error_output)
+    if(result EQUAL 0 OR error_output MATCHES "would duplicate path")
+        return()
+    endif()
+    message(FATAL_ERROR "Unable to add rpath ${rpath} to ${target}: ${error_output}")
+endfunction()
+
+function(copy_runtime_lib source output_name)
+    set(target "${RUNTIME_LIB_DIR}/${output_name}")
+    require_path("${source}" "${output_name}")
+    run_tool("${CMAKE_COMMAND}" -E copy_if_different "${source}" "${target}")
+    run_tool(chmod u+w "${target}")
+endfunction()
+
+function(set_runtime_id target id)
+    run_tool(install_name_tool -id "${id}" "${target}")
+endfunction()
+
+function(change_runtime_dependency target old_path new_path)
+    run_tool(install_name_tool -change "${old_path}" "${new_path}" "${target}")
+endfunction()
+
+function(rewrite_qt_framework_dependencies target)
+    execute_process(
+        COMMAND otool -L "${target}"
+        RESULT_VARIABLE result
+        OUTPUT_VARIABLE linked_libraries
+        ERROR_QUIET)
+    if(NOT result EQUAL 0)
+        return()
+    endif()
+
+    string(REGEX MATCHALL
+        "[^ \n\t]+/Qt[A-Za-z0-9]+\\.framework/Versions/5/Qt[A-Za-z0-9]+"
+        qt_framework_paths
+        "${linked_libraries}")
+    foreach(old_path ${qt_framework_paths})
+        string(REGEX REPLACE
+            "^.*(Qt[A-Za-z0-9]+\\.framework/Versions/5/Qt[A-Za-z0-9]+)$"
+            "@rpath/\\1"
+            new_path
+            "${old_path}")
+        change_runtime_dependency("${target}" "${old_path}" "${new_path}")
+    endforeach()
+endfunction()
+
+function(normalize_plugin_id target)
+    if(target MATCHES "/Contents/PlugIns/.+\\.dylib$")
+        get_filename_component(plugin_name "${target}" NAME)
+        set_runtime_id("${target}" "@rpath/${plugin_name}")
+    endif()
+endfunction()
+
+require_path("@MACDEPLOYQT_EXECUTABLE@" "macdeployqt")
+require_path("${APP_BIN}" "application binary")
+run_tool("${CMAKE_COMMAND}" -E make_directory "${RUNTIME_LIB_DIR}")
+
+run_tool("@MACDEPLOYQT_EXECUTABLE@" "${APP_ROOT}" -always-overwrite)
+
+copy_runtime_lib("@MONGOCXX_RUNTIME_LIBRARY@" "libmongocxx._noabi.dylib")
+copy_runtime_lib("@BSONCXX_RUNTIME_LIBRARY@" "libbsoncxx._noabi.dylib")
+copy_runtime_lib("@MONGOC2_RUNTIME_LIBRARY@" "libmongoc2.2.dylib")
+copy_runtime_lib("@BSON2_RUNTIME_LIBRARY@" "libbson2.2.dylib")
+copy_runtime_lib("@ZSTD_RUNTIME_LIBRARY@" "libzstd.1.dylib")
+copy_runtime_lib("@OPENSSL_SSL_LIBRARY_REAL@" "libssl.3.dylib")
+copy_runtime_lib("@OPENSSL_CRYPTO_LIBRARY_REAL@" "libcrypto.3.dylib")
+
+add_runtime_rpath("${APP_BIN}" "@executable_path/../Frameworks")
+add_runtime_rpath("${APP_BIN}" "@executable_path/../PlugIns")
+
+set(QT_WEBENGINE_PROCESS
+    "${RUNTIME_LIB_DIR}/QtWebEngineCore.framework/Versions/5/Helpers/QtWebEngineProcess.app/Contents/MacOS/QtWebEngineProcess")
+if(EXISTS "${QT_WEBENGINE_PROCESS}")
+    add_runtime_rpath("${QT_WEBENGINE_PROCESS}" "@loader_path/../../../../../../..")
+endif()
+
+set_runtime_id("${RUNTIME_LIB_DIR}/libmongocxx._noabi.dylib" "${FRAMEWORKS_REF}/libmongocxx._noabi.dylib")
+set_runtime_id("${RUNTIME_LIB_DIR}/libbsoncxx._noabi.dylib" "${FRAMEWORKS_REF}/libbsoncxx._noabi.dylib")
+set_runtime_id("${RUNTIME_LIB_DIR}/libmongoc2.2.dylib" "${FRAMEWORKS_REF}/libmongoc2.2.dylib")
+set_runtime_id("${RUNTIME_LIB_DIR}/libbson2.2.dylib" "${FRAMEWORKS_REF}/libbson2.2.dylib")
+set_runtime_id("${RUNTIME_LIB_DIR}/libzstd.1.dylib" "${FRAMEWORKS_REF}/libzstd.1.dylib")
+set_runtime_id("${RUNTIME_LIB_DIR}/libssl.3.dylib" "${FRAMEWORKS_REF}/libssl.3.dylib")
+set_runtime_id("${RUNTIME_LIB_DIR}/libcrypto.3.dylib" "${FRAMEWORKS_REF}/libcrypto.3.dylib")
+
+foreach(target "${APP_BIN}" "${RUNTIME_LIB_DIR}/libmongocxx._noabi.dylib")
+    change_runtime_dependency("${target}" "/opt/homebrew/opt/mongo-cxx-driver/lib/libmongocxx._noabi.dylib" "${FRAMEWORKS_REF}/libmongocxx._noabi.dylib")
+    change_runtime_dependency("${target}" "@MONGOCXX_LIBDIR@/libmongocxx._noabi.dylib" "${FRAMEWORKS_REF}/libmongocxx._noabi.dylib")
+    change_runtime_dependency("${target}" "@MONGOCXX_LIBDIR@/libmongocxx.dylib" "${FRAMEWORKS_REF}/libmongocxx._noabi.dylib")
+    change_runtime_dependency("${target}" "@rpath/libmongocxx._noabi.dylib" "${FRAMEWORKS_REF}/libmongocxx._noabi.dylib")
+    change_runtime_dependency("${target}" "/opt/homebrew/opt/mongo-cxx-driver/lib/libbsoncxx._noabi.dylib" "${FRAMEWORKS_REF}/libbsoncxx._noabi.dylib")
+    change_runtime_dependency("${target}" "@BSONCXX_LIBDIR@/libbsoncxx._noabi.dylib" "${FRAMEWORKS_REF}/libbsoncxx._noabi.dylib")
+    change_runtime_dependency("${target}" "@BSONCXX_LIBDIR@/libbsoncxx.dylib" "${FRAMEWORKS_REF}/libbsoncxx._noabi.dylib")
+    change_runtime_dependency("${target}" "@rpath/libbsoncxx._noabi.dylib" "${FRAMEWORKS_REF}/libbsoncxx._noabi.dylib")
+endforeach()
+
+foreach(target "${APP_BIN}" "${RUNTIME_LIB_DIR}/libmongocxx._noabi.dylib" "${RUNTIME_LIB_DIR}/libbsoncxx._noabi.dylib")
+    change_runtime_dependency("${target}" "/opt/homebrew/opt/mongo-c-driver/lib/libmongoc2.2.dylib" "${FRAMEWORKS_REF}/libmongoc2.2.dylib")
+    change_runtime_dependency("${target}" "@MONGOC2_RUNTIME_LIBRARY@" "${FRAMEWORKS_REF}/libmongoc2.2.dylib")
+    change_runtime_dependency("${target}" "@rpath/libmongoc2.2.dylib" "${FRAMEWORKS_REF}/libmongoc2.2.dylib")
+    change_runtime_dependency("${target}" "/opt/homebrew/opt/mongo-c-driver/lib/libbson2.2.dylib" "${FRAMEWORKS_REF}/libbson2.2.dylib")
+    change_runtime_dependency("${target}" "@BSON2_RUNTIME_LIBRARY@" "${FRAMEWORKS_REF}/libbson2.2.dylib")
+    change_runtime_dependency("${target}" "@rpath/libbson2.2.dylib" "${FRAMEWORKS_REF}/libbson2.2.dylib")
+endforeach()
+
+foreach(target "${APP_BIN}" "${RUNTIME_LIB_DIR}/libssl.3.dylib")
+    change_runtime_dependency("${target}" "@OPENSSL_CRYPTO_LIBRARY@" "${FRAMEWORKS_REF}/libcrypto.3.dylib")
+    change_runtime_dependency("${target}" "@OPENSSL_CRYPTO_LIBRARY_REAL@" "${FRAMEWORKS_REF}/libcrypto.3.dylib")
+endforeach()
+
+change_runtime_dependency("${APP_BIN}" "@OPENSSL_SSL_LIBRARY@" "${FRAMEWORKS_REF}/libssl.3.dylib")
+change_runtime_dependency("${APP_BIN}" "@OPENSSL_SSL_LIBRARY_REAL@" "${FRAMEWORKS_REF}/libssl.3.dylib")
+change_runtime_dependency("${RUNTIME_LIB_DIR}/libmongoc2.2.dylib" "@ZSTD_RUNTIME_LIBRARY@" "${FRAMEWORKS_REF}/libzstd.1.dylib")
+change_runtime_dependency("${RUNTIME_LIB_DIR}/libmongoc2.2.dylib" "/opt/homebrew/opt/zstd/lib/libzstd.1.dylib" "${FRAMEWORKS_REF}/libzstd.1.dylib")
+
+file(GLOB_RECURSE BUNDLE_DYLIBS "${APP_ROOT}/*.dylib")
+foreach(bundle_binary "${APP_BIN}" "${QT_WEBENGINE_PROCESS}" ${BUNDLE_DYLIBS})
+    if(EXISTS "${bundle_binary}")
+        add_runtime_rpath("${bundle_binary}" "@executable_path/../Frameworks")
+        rewrite_qt_framework_dependencies("${bundle_binary}")
+        normalize_plugin_id("${bundle_binary}")
+    endif()
+endforeach()
+
+run_tool(codesign --force --deep --sign - --timestamp=none "${APP_ROOT}")

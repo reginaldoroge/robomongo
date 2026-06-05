@@ -59,6 +59,13 @@ install(
     DESTINATION "${qt_conf_dir}")
 
 # Install OpenSSL dynamic lib files
+if(NOT SYSTEM_WINDOWS)
+    get_target_property(OPENSSL_SSL_LIBRARY ssl IMPORTED_LOCATION)
+    get_target_property(OPENSSL_CRYPTO_LIBRARY crypto IMPORTED_LOCATION)
+    get_filename_component(OPENSSL_SSL_LIBRARY_REAL "${OPENSSL_SSL_LIBRARY}" REALPATH)
+    get_filename_component(OPENSSL_CRYPTO_LIBRARY_REAL "${OPENSSL_CRYPTO_LIBRARY}" REALPATH)
+endif()
+
 if(SYSTEM_WINDOWS)
     install(
         FILES 
@@ -68,16 +75,14 @@ if(SYSTEM_WINDOWS)
 elseif(SYSTEM_MACOSX)
     install(
         FILES 
-        "${OpenSSL_DIR}/libssl.1.1.dylib"
-        "${OpenSSL_DIR}/libcrypto.1.1.dylib"
-        DESTINATION ${lib_dir}/lib)
+        "${OPENSSL_SSL_LIBRARY_REAL}"
+        "${OPENSSL_CRYPTO_LIBRARY_REAL}"
+        DESTINATION ${lib_dir})
 elseif(SYSTEM_LINUX)
     install(
         FILES 
-        "${OpenSSL_DIR}/libssl.so"
-        "${OpenSSL_DIR}/libssl.so.1.0.0"        
-        "${OpenSSL_DIR}/libcrypto.so"        
-        "${OpenSSL_DIR}/libcrypto.so.1.0.0"
+        "${OPENSSL_SSL_LIBRARY_REAL}"
+        "${OPENSSL_CRYPTO_LIBRARY_REAL}"
         DESTINATION ${lib_dir})         
 endif()
 
@@ -102,12 +107,15 @@ if(NOT SYSTEM_LINUX)
     SET(QT_LIBS ${QT_LIBS} WebEngineWidgets WebEngineCore Quick 
                            QuickWidgets WebChannel Qml Positioning)
 endif()
-install_qt_lib(${QT_LIBS})
-install_qt_plugins(QGifPlugin QICOPlugin)
-install_icu_libs()
 set(QT_STYLES_DIR ${Qt5Core_DIR}/../../../plugins/styles/)
 set(QT_BIN_DIR ${Qt5Core_DIR}/../../../bin/)
 set(QT_RESOURCES_DIR ${Qt5Core_DIR}/../../../resources/)
+
+if(NOT SYSTEM_MACOSX)
+    install_qt_lib(${QT_LIBS})
+    install_qt_plugins(QGifPlugin QICOPlugin)
+    install_icu_libs()
+endif()
 
 if(SYSTEM_LINUX)
     install_qt_lib(XcbQpa DBus)
@@ -120,19 +128,41 @@ if(SYSTEM_LINUX)
             "/usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.28"              
         DESTINATION ${lib_dir})
 elseif(SYSTEM_MACOSX)
-    install_qt_lib(MacExtras DBus)
-    install_qt_plugins(
-        QCocoaIntegrationPlugin
-        QMinimalIntegrationPlugin
-        QOffscreenIntegrationPlugin)
-
     # Install icon
     install(
         FILES       "${CMAKE_SOURCE_DIR}/install/macosx/robomongo.icns"
         DESTINATION "${resources_dir}")
 
-    # Install styles    
-    install(FILES "${QT_STYLES_DIR}/libqmacstyle.dylib" DESTINATION ${styles_dir})
+    find_program(MACDEPLOYQT_EXECUTABLE
+        NAMES macdeployqt
+        HINTS "${QT_BIN_DIR}" "/opt/homebrew/opt/qt@5/bin" "/usr/local/opt/qt@5/bin")
+
+    set(MONGOCXX_RUNTIME_LIBRARY "${MONGOCXX_LIBDIR}/libmongocxx._noabi.dylib")
+    set(BSONCXX_RUNTIME_LIBRARY "${BSONCXX_LIBDIR}/libbsoncxx._noabi.dylib")
+    find_file(MONGOC2_RUNTIME_LIBRARY NAMES libmongoc2.2.dylib
+        PATHS "/opt/homebrew/opt/mongo-c-driver/lib" "/usr/local/opt/mongo-c-driver/lib")
+    find_file(BSON2_RUNTIME_LIBRARY NAMES libbson2.2.dylib
+        PATHS "/opt/homebrew/opt/mongo-c-driver/lib" "/usr/local/opt/mongo-c-driver/lib")
+    find_file(ZSTD_RUNTIME_LIBRARY NAMES libzstd.1.dylib
+        PATHS "/opt/homebrew/opt/zstd/lib" "/usr/local/opt/zstd/lib")
+
+    foreach(required_runtime
+            MACDEPLOYQT_EXECUTABLE
+            MONGOCXX_RUNTIME_LIBRARY
+            BSONCXX_RUNTIME_LIBRARY
+            MONGOC2_RUNTIME_LIBRARY
+            BSON2_RUNTIME_LIBRARY
+            ZSTD_RUNTIME_LIBRARY)
+        if(NOT EXISTS "${${required_runtime}}")
+            message(FATAL_ERROR "Required macOS runtime file is missing: ${required_runtime}")
+        endif()
+    endforeach()
+
+    configure_file(
+        "${CMAKE_SOURCE_DIR}/cmake/RobomongoMacBundleRuntime.cmake.in"
+        "${CMAKE_BINARY_DIR}/RobomongoMacBundleRuntime.cmake"
+        @ONLY)
+    install(SCRIPT "${CMAKE_BINARY_DIR}/RobomongoMacBundleRuntime.cmake")
 elseif(SYSTEM_WINDOWS)
     install_qt_plugins(
         QWindowsIntegrationPlugin
