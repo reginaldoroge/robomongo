@@ -72,19 +72,12 @@ elseif(SYSTEM_MACOSX)
 #     endforeach()
 endif()
 
-# Disable WebEngineWidgets for Linux
-SET(WebEngineWidgets "Qt5::WebEngineWidgets") 
-if(SYSTEM_LINUX)
-   SET(WebEngineWidgets)  
-endif()
-
 target_link_libraries(robo_unit_tests 
     gtest 
     gtest_main
     Qt5::Widgets
     Qt5::Network
     Qt5::Xml
-    ${WebEngineWidgets}
     qjson
     qscintilla
     mongodb
@@ -108,14 +101,6 @@ if(SYSTEM_WINDOWS)
     set(QT_BIN_FILES "${QT_BIN_FILES}" ${qt_bin_dir}/Qt5PrintSupport${D}${CMAKE_SHARED_LIBRARY_SUFFIX};)
     set(QT_BIN_FILES "${QT_BIN_FILES}" ${qt_bin_dir}/Qt5Widgets${D}${CMAKE_SHARED_LIBRARY_SUFFIX};)
     set(QT_BIN_FILES "${QT_BIN_FILES}" ${qt_bin_dir}/Qt5Xml${D}${CMAKE_SHARED_LIBRARY_SUFFIX};)
-    set(QT_BIN_FILES "${QT_BIN_FILES}" ${qt_bin_dir}/Qt5Positioning${D}${CMAKE_SHARED_LIBRARY_SUFFIX};)
-    set(QT_BIN_FILES "${QT_BIN_FILES}" ${qt_bin_dir}/Qt5Qml${D}${CMAKE_SHARED_LIBRARY_SUFFIX};)
-    set(QT_BIN_FILES "${QT_BIN_FILES}" ${qt_bin_dir}/Qt5Quick${D}${CMAKE_SHARED_LIBRARY_SUFFIX};)
-    set(QT_BIN_FILES "${QT_BIN_FILES}" ${qt_bin_dir}/Qt5QuickWidgets${D}${CMAKE_SHARED_LIBRARY_SUFFIX};)
-    set(QT_BIN_FILES "${QT_BIN_FILES}" ${qt_bin_dir}/Qt5WebChannel${D}${CMAKE_SHARED_LIBRARY_SUFFIX};)
-    set(QT_BIN_FILES "${QT_BIN_FILES}" ${qt_bin_dir}/Qt5WebEngineCore${D}${CMAKE_SHARED_LIBRARY_SUFFIX};)
-    set(QT_BIN_FILES "${QT_BIN_FILES}" ${qt_bin_dir}/Qt5WebEngineWidgets${D}${CMAKE_SHARED_LIBRARY_SUFFIX};)
-    set(QT_BIN_FILES "${QT_BIN_FILES}" ${qt_bin_dir}/Qt5PrintSupport${D}${CMAKE_SHARED_LIBRARY_SUFFIX};)
 
     get_target_property(TESTS_BIN_DIR robo_unit_tests BINARY_DIR)
     file(COPY ${QT_BIN_FILES} DESTINATION ${TESTS_BIN_DIR}/${CMAKE_BUILD_TYPE})

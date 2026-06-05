@@ -103,10 +103,6 @@ install(
 
 # Install common dependencies
 SET(QT_LIBS Core Gui Widgets PrintSupport Network Xml)
-if(NOT SYSTEM_LINUX)
-    SET(QT_LIBS ${QT_LIBS} WebEngineWidgets WebEngineCore Quick 
-                           QuickWidgets WebChannel Qml Positioning)
-endif()
 set(QT_STYLES_DIR ${Qt5Core_DIR}/../../../plugins/styles/)
 set(QT_BIN_DIR ${Qt5Core_DIR}/../../../bin/)
 set(QT_RESOURCES_DIR ${Qt5Core_DIR}/../../../resources/)
@@ -168,15 +164,6 @@ elseif(SYSTEM_WINDOWS)
         QWindowsIntegrationPlugin
         QMinimalIntegrationPlugin
         QOffscreenIntegrationPlugin)
-
-    # Qt WebEngine dependencies
-    install(DIRECTORY ${QT_RESOURCES_DIR} DESTINATION ${resources_dir})
-    install(FILES 
-                "${QT_BIN_DIR}/libEGL.dll"
-                "${QT_BIN_DIR}/libGLESv2.dll" 
-                "${QT_BIN_DIR}/opengl32sw.dll" 
-                "${QT_BIN_DIR}/QtWebEngineProcess.exe" 
-            DESTINATION ${bin_dir})
 
     # Install Styles
     install(FILES "${QT_STYLES_DIR}/qwindowsvistastyle.dll" DESTINATION ${styles_dir})

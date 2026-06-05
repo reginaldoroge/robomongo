@@ -94,12 +94,6 @@ copy_runtime_lib("@OPENSSL_CRYPTO_LIBRARY_REAL@" "libcrypto.3.dylib")
 add_runtime_rpath("${APP_BIN}" "@executable_path/../Frameworks")
 add_runtime_rpath("${APP_BIN}" "@executable_path/../PlugIns")
 
-set(QT_WEBENGINE_PROCESS
-    "${RUNTIME_LIB_DIR}/QtWebEngineCore.framework/Versions/5/Helpers/QtWebEngineProcess.app/Contents/MacOS/QtWebEngineProcess")
-if(EXISTS "${QT_WEBENGINE_PROCESS}")
-    add_runtime_rpath("${QT_WEBENGINE_PROCESS}" "@loader_path/../../../../../../..")
-endif()
-
 set_runtime_id("${RUNTIME_LIB_DIR}/libmongocxx._noabi.dylib" "${FRAMEWORKS_REF}/libmongocxx._noabi.dylib")
 set_runtime_id("${RUNTIME_LIB_DIR}/libbsoncxx._noabi.dylib" "${FRAMEWORKS_REF}/libbsoncxx._noabi.dylib")
 set_runtime_id("${RUNTIME_LIB_DIR}/libmongoc2.2.dylib" "${FRAMEWORKS_REF}/libmongoc2.2.dylib")

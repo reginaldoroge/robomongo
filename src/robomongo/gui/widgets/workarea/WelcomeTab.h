@@ -3,7 +3,6 @@
 #ifndef __linux__  // ---------------------- Windows, macOS impl. --------------------------// 
 
 #include <QWidget>
-#include <QWebEnginePage>
 
 QT_BEGIN_NAMESPACE
 class QScrollArea;
@@ -22,16 +21,6 @@ namespace Robomongo
 
     private:
         QScrollArea* _parent;
-    };
-
-    // ------------------ MyWebPage
-    class MyWebPage : public QWebEnginePage
-    {
-        Q_OBJECT
-    public:
-        MyWebPage(QObject* parent = nullptr) : QWebEnginePage(parent) {}
-        bool acceptNavigationRequest(
-            QUrl const& url, NavigationType type, bool /*isMainFrame*/) override;
     };
 }
 
