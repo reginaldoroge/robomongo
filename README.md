@@ -90,15 +90,54 @@ The app now uses dino-robomongo branding for the splash screen and application i
 The verified development target is currently:
 
 - macOS ARM64
+- Windows x64
 - Qt 5
 - embedded MongoDB shell/client 4.2
 - modern `mongocxx`/`bsoncxx` libraries available locally
 
-The project has been built and launched successfully on Apple Silicon.
+The project has been built and launched successfully on Apple Silicon and Windows x64.
 
-Windows x64 and Linux builds are still planned targets. The codebase keeps cross-platform support in mind, but each platform needs its own dependency build and packaging work.
+Linux builds are still a planned target. The codebase keeps cross-platform support in mind, but each platform needs its own dependency build and packaging work.
 
 Qt WebEngine was removed from the revived welcome/dashboard path. That makes Windows packaging simpler because the app no longer needs Chromium helper processes or WebEngine runtime DLLs just to render the startup tab.
+
+## Windows x64 Build and Release Notes
+
+The Windows build required a full bring-up of the legacy Robo 3T stack on a modern Windows toolchain. This was not a simple rebuild: the original project depends on an embedded MongoDB shell/client, older C++ code, Qt 5, OpenSSL, and native MongoDB driver libraries that all need to line up at link time and runtime.
+
+The current Windows package was built with:
+
+- Windows x64
+- Visual Studio Build Tools 2022
+- Qt 5.12.8 for MSVC x64
+- OpenSSL from vcpkg
+- MongoDB C driver and C++ driver from vcpkg
+- embedded Robo Mongo shell/client 4.2 objects
+- Inno Setup for the final installer
+
+The final installer is:
+
+```text
+dino-robomongo-2.0.0-windows-x64-setup.exe
+SHA256: c986546d284b9d0215add1fda78328fa5d82233ad60796e8683d0eda706129e0
+```
+
+VirusTotal report:
+
+```text
+https://www.virustotal.com/gui/file/c986546d284b9d0215add1fda78328fa5d82233ad60796e8683d0eda706129e0?nocache=1
+```
+
+At the time of publishing, the installer had one generic machine-learning detection out of 71 security vendors. The file is an unsigned Inno Setup executable containing the application, Qt runtime DLLs, OpenSSL runtime DLLs, MongoDB driver runtime DLLs, and Microsoft Visual C++ runtime DLLs. New unsigned Windows installers can trigger reputation-based or heuristic detections even when the remaining vendors report the file as clean.
+
+The installer creates:
+
+- the application installation directory
+- a Start Menu shortcut
+- a Desktop shortcut
+- an uninstaller entry
+
+For public redistribution, the preferred next hardening step is code signing: sign both `dino-robomongo.exe` and the generated installer, then republish the Windows asset.
 
 ## Cross-Platform Build Strategy
 
@@ -142,7 +181,14 @@ cmake -S . -B build\windows-x64 ^
 cmake --build build\windows-x64 --config Release --target robomongo
 ```
 
-The Windows build still needs its local dependency set wired first: Qt 5 for MSVC x64, OpenSSL, the legacy Robo Mongo shell/client 4.2 objects, and the modern MongoDB C/C++ driver libraries.
+The Windows build needs its local dependency set wired first: Qt 5 for MSVC x64, OpenSSL, the legacy Robo Mongo shell/client 4.2 objects, and the modern MongoDB C/C++ driver libraries.
+
+Once the application is built, install the runtime layout and build the Windows installer:
+
+```bat
+cmake --install build\windows-x64 --config Release
+iscc installer\windows\dino-robomongo.iss
+```
 
 Unit tests can be built and run with:
 
@@ -202,3 +248,13 @@ Later:
 This project descends from Robo 3T and remains under the GNU General Public License version 3.
 
 Original copyright belongs to the Robo 3T / 3T Software Labs contributors.
+
+## Support
+
+This revival took a lot of build, compatibility, and packaging work, especially to keep the old MongoDB shell path alive while adding a modern MongoDB driver path and a working Windows installer.
+
+If this project helps you, please consider buying me a coffee through PayPal:
+
+```text
+reginaldoroge@gmail.com
+```
