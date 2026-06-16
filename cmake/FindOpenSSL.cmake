@@ -109,13 +109,18 @@ add_library(crypto SHARED IMPORTED)
     
 # todo: refactor
 if(SYSTEM_WINDOWS)
+    if(EXISTS "${OpenSSL_DIR}/lib/libssl.lib")
+        set(OPENSSL_LIBRARY_DIR "${OpenSSL_DIR}/lib")
+    else()
+        set(OPENSSL_LIBRARY_DIR "${OpenSSL_DIR}")
+    endif()
     set_target_properties(ssl PROPERTIES
         INTERFACE_INCLUDE_DIRECTORIES   "${OpenSSL_DIR}/include"
-        IMPORTED_IMPLIB                 "${OpenSSL_DIR}/libssl.lib"
+        IMPORTED_IMPLIB                 "${OPENSSL_LIBRARY_DIR}/libssl.lib"
     )
     set_target_properties(crypto PROPERTIES
         INTERFACE_INCLUDE_DIRECTORIES   "${OpenSSL_DIR}/include"
-        IMPORTED_IMPLIB                 "${OpenSSL_DIR}/libcrypto.lib"
+        IMPORTED_IMPLIB                 "${OPENSSL_LIBRARY_DIR}/libcrypto.lib"
     )
 else()
   if(SYSTEM_MACOSX)

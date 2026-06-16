@@ -67,11 +67,44 @@ if(NOT SYSTEM_WINDOWS)
 endif()
 
 if(SYSTEM_WINDOWS)
+    file(GLOB OPENSSL_RUNTIME_FILES
+        "${OpenSSL_DIR}/libssl*.dll"
+        "${OpenSSL_DIR}/libcrypto*.dll"
+        "${OpenSSL_DIR}/bin/libssl*.dll"
+        "${OpenSSL_DIR}/bin/libcrypto*.dll")
     install(
-        FILES 
-        "${OpenSSL_DIR}/libssl-1_1-x64.dll"
-        "${OpenSSL_DIR}/libcrypto-1_1-x64.dll"
+        FILES ${OPENSSL_RUNTIME_FILES}
         DESTINATION ${bin_dir})
+
+    set(MONGO_DRIVER_RUNTIME_DIRS)
+    foreach(mongo_driver_prefix ${MONGOCXX_PREFIX} ${BSONCXX_PREFIX})
+        if(mongo_driver_prefix)
+            list(APPEND MONGO_DRIVER_RUNTIME_DIRS "${mongo_driver_prefix}/bin")
+        endif()
+    endforeach()
+    foreach(mongo_driver_lib_dir ${MONGOCXX_LIBRARY_DIRS} ${BSONCXX_LIBRARY_DIRS})
+        if(mongo_driver_lib_dir)
+            get_filename_component(mongo_driver_bin_dir "${mongo_driver_lib_dir}/../bin" ABSOLUTE)
+            list(APPEND MONGO_DRIVER_RUNTIME_DIRS "${mongo_driver_bin_dir}")
+        endif()
+    endforeach()
+    list(REMOVE_DUPLICATES MONGO_DRIVER_RUNTIME_DIRS)
+
+    set(MONGO_DRIVER_RUNTIME_FILES)
+    foreach(mongo_driver_runtime_dir ${MONGO_DRIVER_RUNTIME_DIRS})
+        file(GLOB mongo_driver_runtime_files
+            "${mongo_driver_runtime_dir}/mongoc*.dll"
+            "${mongo_driver_runtime_dir}/bson*.dll"
+            "${mongo_driver_runtime_dir}/z*.dll"
+            "${mongo_driver_runtime_dir}/utf8proc*.dll")
+        list(APPEND MONGO_DRIVER_RUNTIME_FILES ${mongo_driver_runtime_files})
+    endforeach()
+    if(MONGO_DRIVER_RUNTIME_FILES)
+        list(REMOVE_DUPLICATES MONGO_DRIVER_RUNTIME_FILES)
+        install(
+            FILES ${MONGO_DRIVER_RUNTIME_FILES}
+            DESTINATION ${bin_dir})
+    endif()
 elseif(SYSTEM_MACOSX)
     install(
         FILES 

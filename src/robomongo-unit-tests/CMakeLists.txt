@@ -104,8 +104,10 @@ if(SYSTEM_WINDOWS)
 
     get_target_property(TESTS_BIN_DIR robo_unit_tests BINARY_DIR)
     file(COPY ${QT_BIN_FILES} DESTINATION ${TESTS_BIN_DIR}/${CMAKE_BUILD_TYPE})
-    file(COPY 
-        ${OpenSSL_DIR}/libssl-1_1-x64.dll
-        ${OpenSSL_DIR}/libcrypto-1_1-x64.dll
-        DESTINATION ${TESTS_BIN_DIR}/${CMAKE_BUILD_TYPE})
+    file(GLOB OPENSSL_RUNTIME_FILES
+        "${OpenSSL_DIR}/libssl*.dll"
+        "${OpenSSL_DIR}/libcrypto*.dll"
+        "${OpenSSL_DIR}/bin/libssl*.dll"
+        "${OpenSSL_DIR}/bin/libcrypto*.dll")
+    file(COPY ${OPENSSL_RUNTIME_FILES} DESTINATION ${TESTS_BIN_DIR}/${CMAKE_BUILD_TYPE})
 endif()
